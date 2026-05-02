@@ -5,7 +5,8 @@
       "npm": "@ai-sdk/openai-compatible",
       "name": "LM Studio (Arctica)",
       "options": {
-        "baseURL": "http://host.docker.internal:1234/v1"
+        "baseURL": "http://host.docker.internal:1234/v1",
+        "apiKey": "{env:LMSTUDIO_API_KEY}"
       },
       "models": {
         "qwen/qwen3.6-27b": {

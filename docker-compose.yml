@@ -64,11 +64,11 @@ services:
         soft: 262144
         hard: 262144
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8123/ping"]
+      test: ["CMD-SHELL", "clickhouse-client --user=$${CLICKHOUSE_USER} --password=$${CLICKHOUSE_PASSWORD} --query 'SELECT 1' || exit 1"]
       interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
     networks:
       - intelliforce-net
 
@@ -110,6 +110,8 @@ services:
       CLICKHOUSE_HOST: clickhouse
       REDIS_HOST: redis
       REDIS_URL: redis://redis:6379/0
+      PYTHONPATH: /app
+      PYTHONUNBUFFERED: "1"
     volumes:
       - ./opencode:/workspace/opencode:ro          # config OpenCode (read-only)
       - ./worker:/app:ro                           # código worker (read-only)

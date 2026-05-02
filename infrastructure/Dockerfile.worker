@@ -22,20 +22,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # -----------------------------------------------------------------------------
-# Instala Bun (runtime do OpenCode)
+# Instala OpenCode CLI via instalador oficial (binário standalone)
+# Vem com Bun embarcado, não precisa de Node nem Bun separado
+# Cria symlink em /usr/local/bin pra garantir que esteja no PATH default
 # -----------------------------------------------------------------------------
-ENV BUN_INSTALL=/usr/local
-RUN curl -fsSL https://bun.sh/install | bash \
-    && bun --version
-
-# -----------------------------------------------------------------------------
-# Instala OpenCode CLI globalmente
-# -----------------------------------------------------------------------------
-RUN bun add -g opencode-ai \
-    && opencode --version || echo "OpenCode instalado (versão check pulado)"
-
-# Garantir que opencode esteja no PATH
-ENV PATH="/root/.bun/bin:/usr/local/bin:${PATH}"
+RUN curl -fsSL https://opencode.ai/install | bash && \
+    OPENCODE_BIN=$(find /root /usr/local /opt -name opencode -type f -executable 2>/dev/null | head -1) && \
+    if [ -z "$OPENCODE_BIN" ]; then \
+        echo "ERRO: opencode binário não encontrado após install" && exit 1; \
+    fi && \
+    echo "OpenCode instalado em: $OPENCODE_BIN" && \
+    ln -sf "$OPENCODE_BIN" /usr/local/bin/opencode && \
+    /usr/local/bin/opencode --version
 
 # -----------------------------------------------------------------------------
 # Python: dependências da aplicação
@@ -52,7 +50,9 @@ COPY worker/ /app/
 
 # Configuração do OpenCode será montada via volume em /workspace/opencode
 WORKDIR /workspace
-ENV OPENCODE_CONFIG_PATH=/workspace/opencode
+ENV OPENCODE_CONFIG_PATH=/workspace/opencode \
+    PYTHONPATH=/app \
+    PYTHONUNBUFFERED=1
 
 # -----------------------------------------------------------------------------
 # Healthcheck e entrypoint

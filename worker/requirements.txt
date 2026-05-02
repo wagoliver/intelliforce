@@ -19,7 +19,7 @@ pgvector==0.3.6
 
 # --- ClickHouse ---
 clickhouse-driver==0.2.9
-clickhouse-connect==0.7.20
+clickhouse-connect==0.8.18
 
 # --- Redis (queue + streams + cache) ---
 redis[hiredis]==5.0.8

@@ -1,0 +1,147 @@
+# =============================================================================
+# IntelliForce — Docker Compose (MVP)
+# =============================================================================
+# Sobe o stack completo de desenvolvimento local:
+#   - Postgres 16 com pgvector (estado transacional + vector search)
+#   - ClickHouse (eventos verbosos e analytics)
+#   - Redis 7 (fila + cache + event bus via Streams)
+#   - Worker IntelliForce (Python + Bun + OpenCode CLI)
+#
+# LM Studio: roda no HOST (Mac mini), acessado via host.docker.internal:1234
+#
+# Como subir:
+#   1. cp .env.example .env  (e ajuste os valores)
+#   2. docker compose up -d --build
+#   3. docker compose logs -f worker
+# =============================================================================
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL com pgvector
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: intelliforce-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-intelliforce}
+      POSTGRES_USER: ${POSTGRES_USER:-intelliforce}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-intelliforce} -d ${POSTGRES_DB:-intelliforce}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - intelliforce-net
+
+  # ---------------------------------------------------------------------------
+  # ClickHouse
+  # ---------------------------------------------------------------------------
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.10-alpine
+    container_name: intelliforce-clickhouse
+    restart: unless-stopped
+    environment:
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-intelliforce_audit}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-intelliforce}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-change-me}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    ports:
+      - "8123:8123"   # HTTP
+      - "9000:9000"   # Native client
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - clickhouse_logs:/var/log/clickhouse-server
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8123/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - intelliforce-net
+
+  # ---------------------------------------------------------------------------
+  # Redis (fila + cache + event bus)
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: intelliforce-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - intelliforce-net
+
+  # ---------------------------------------------------------------------------
+  # Worker IntelliForce (Python + Bun + OpenCode CLI)
+  # ---------------------------------------------------------------------------
+  worker:
+    build:
+      context: .
+      dockerfile: infrastructure/Dockerfile.worker
+    container_name: intelliforce-worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # Override pra garantir que aponta pros containers internos
+      POSTGRES_HOST: postgres
+      CLICKHOUSE_HOST: clickhouse
+      REDIS_HOST: redis
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./opencode:/workspace/opencode:ro          # config OpenCode (read-only)
+      - ./worker:/app:ro                           # código worker (read-only)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"        # acesso ao host (LM Studio)
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - intelliforce-net
+    command: ["python", "-m", "intelliforce.worker"]
+
+# =============================================================================
+# Volumes persistentes
+# =============================================================================
+volumes:
+  postgres_data:
+    driver: local
+  clickhouse_data:
+    driver: local
+  clickhouse_logs:
+    driver: local
+  redis_data:
+    driver: local
+
+# =============================================================================
+# Network interna
+# =============================================================================
+networks:
+  intelliforce-net:
+    driver: bridge

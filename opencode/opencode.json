@@ -1,0 +1,44 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "lmstudio": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "LM Studio (Arctica)",
+      "options": {
+        "baseURL": "http://host.docker.internal:1234/v1"
+      },
+      "models": {
+        "qwen/qwen3.6-27b": {
+          "name": "Arctica qwen3.6 27b",
+          "options": {
+            "max_tokens": 8192,
+            "context_length": 32768
+          }
+        },
+        "qwen2.5-coder-14b-instruct": {
+          "name": "Qwen 2.5 Coder 14B",
+          "options": {
+            "max_tokens": 8192,
+            "context_length": 32768
+          }
+        },
+        "deepseek-r1-distill-qwen-32b": {
+          "name": "DeepSeek R1 Distill 32B",
+          "options": {
+            "max_tokens": 8192,
+            "context_length": 32768
+          }
+        },
+        "openai/gpt-oss-20b": {
+          "name": "GPT-OSS 20B",
+          "options": {
+            "max_tokens": 8192,
+            "context_length": 32768
+          }
+        }
+      }
+    }
+  },
+  "model": "lmstudio/qwen/qwen3.6-27b",
+  "disabled_providers": []
+}

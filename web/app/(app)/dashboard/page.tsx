@@ -1,6 +1,9 @@
 "use client";
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { useEffect, useMemo, useState } from "react";
+
+import { departments as deptsApi, type DepartmentOut } from "@/lib/api/departments";
 
 import "./home-v2.css";
 
@@ -8,6 +11,43 @@ import "./home-v2.css";
 const data = {
   user: { name: "Wagner", role: "Operations builder", org: "Arctica" },
 };
+
+// Converte DepartmentOut do backend pro shape esperado pelo render do mockup.
+function toOrgShape(dept: DepartmentOut): any {
+  const teams = dept.squads.map((s) => ({
+    name: s.display_name,
+    roles: s.activities.map((a) => ({
+      name: a.display_name,
+      count: a.agent_count || a.target_agent_count,
+      skill: a.skill_code || "···",
+    })),
+  }));
+  const totalAgents = dept.total_agents || dept.squads.reduce(
+    (sum, s) => sum + s.activities.reduce((sa, a) => sa + (a.agent_count || a.target_agent_count), 0),
+    0,
+  );
+  // Distribui contagens por status (heurística: 80% active, 10% idle, 5% offline, 5% error/0)
+  const active = Math.round(totalAgents * 0.85);
+  const idle = Math.round(totalAgents * 0.10);
+  const offline = Math.max(0, totalAgents - active - idle);
+  return {
+    id: dept.name,
+    name: dept.display_name,
+    owner: { name: "—", role: "Owner pendente" },
+    objective: dept.objective || "Sem objetivo definido.",
+    cost: { monthly: Number(dept.monthly_cost_budget_usd) || 0, currency: "USD" },
+    health: dept.health,
+    teams,
+    agents: { active, idle, offline, error: 0 },
+    metrics: {
+      registered: 0,
+      avgHandle: "—",
+      errorPct: 0,
+      executed: 0,
+      timeline: [10, 12, 14, 18, 22, 26, 28, 30, 28, 26, 24, 20],
+    },
+  };
+}
 
 // ===== Org structure (mock data fiel ao protótipo) =====
 const ORG = [
@@ -257,16 +297,16 @@ function TopBar() {
   );
 }
 
-function OrgHeader() {
-  const totalAgents = ORG.reduce((s, d: any) => s + Object.values(d.agents).reduce((a: any, b: any) => a + b, 0), 0);
-  const totalActive = ORG.reduce((s, d) => s + d.agents.active, 0);
-  const totalCost = ORG.reduce((s, d) => s + d.cost.monthly, 0);
+function OrgHeader({ orgList }: { orgList: any[] }) {
+  const totalAgents = orgList.reduce((s, d: any) => s + Object.values(d.agents).reduce((a: any, b: any) => a + b, 0), 0);
+  const totalActive = orgList.reduce((s, d) => s + d.agents.active, 0);
+  const totalCost = orgList.reduce((s, d) => s + d.cost.monthly, 0);
   return (
     <header className="org-header">
       <div className="oh-head">
-        <div className="oh-eyebrow">Your digital workforce</div>
+        <div className="oh-eyebrow">Sua força de trabalho digital</div>
         <h1 className="oh-title">
-          <span className="num">{ORG.length}</span> departments,&nbsp;
+          <span className="num">{orgList.length}</span> departments,&nbsp;
           <span className="num">{totalAgents.toLocaleString()}</span> digital employees on payroll.
         </h1>
       </div>
@@ -418,10 +458,31 @@ function Timeline({ data, health }: any) {
 
 export default function HomeV2Page() {
   const [collapsed, setCollapsed] = useState(false);
+  const [orgData, setOrgData] = useState<any[] | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     document.documentElement.dataset.theme = "light";
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const list = await deptsApi.list();
+        if (!cancelled) setOrgData(list.map(toOrgShape));
+      } catch {
+        if (!cancelled) setOrgData([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    load();
+    const interval = setInterval(load, 30_000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, []);
+
+  const orgList = orgData ?? [];
 
   return (
     <div className={`app ${collapsed ? "sidebar-collapsed" : ""}`}>
@@ -429,12 +490,39 @@ export default function HomeV2Page() {
       <main>
         <TopBar />
         <div className="canvas">
-          <OrgHeader />
-          <div className="dept-list">
-            {ORG.map(d => <DepartmentRow key={d.id} dept={d} />)}
-          </div>
+          <OrgHeader orgList={orgList} />
+          {loading && (
+            <div style={{ padding: 40, textAlign: "center", color: "var(--text-muted)" }}>
+              Carregando organização…
+            </div>
+          )}
+          {!loading && orgList.length === 0 && (
+            <EmptyState />
+          )}
+          {!loading && orgList.length > 0 && (
+            <div className="dept-list">
+              {orgList.map((d: any) => <DepartmentRow key={d.id} dept={d} />)}
+            </div>
+          )}
         </div>
       </main>
+    </div>
+  );
+}
+
+function EmptyState() {
+  return (
+    <div style={{
+      padding: 60, textAlign: "center", border: "1px dashed var(--border-strong)",
+      borderRadius: "var(--radius-lg)", background: "var(--bg-elev)",
+    }}>
+      <h2 className="oh-title" style={{ fontSize: 24 }}>Nenhum departamento ainda</h2>
+      <p style={{ color: "var(--text-muted)", marginTop: 12, marginBottom: 24 }}>
+        Crie seu primeiro departamento pra começar a estruturar a sua força de trabalho digital.
+      </p>
+      <a href="/setup" className="oh-cta" style={{ display: "inline-flex" }}>
+        + Criar primeiro department
+      </a>
     </div>
   );
 }

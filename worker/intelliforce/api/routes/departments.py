@@ -1,0 +1,363 @@
+"""CRUD de Departments + Squads + Activities (aninhado)."""
+from __future__ import annotations
+
+import uuid
+
+from fastapi import APIRouter, Depends, HTTPException, Response, status
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from intelliforce.api.deps import get_current_user, get_db
+from intelliforce.api.schemas.organization import (
+    ActivityCreate,
+    ActivityOut,
+    ActivityUpdate,
+    DepartmentCreate,
+    DepartmentOut,
+    DepartmentUpdate,
+    SquadCreate,
+    SquadOut,
+    SquadUpdate,
+)
+from intelliforce.db.models.activity import Activity
+from intelliforce.db.models.agent import Agent
+from intelliforce.db.models.department import Department
+from intelliforce.db.models.squad import Squad
+from intelliforce.db.models.user import User
+from intelliforce.events.bus import EventBus
+
+router = APIRouter(prefix="/departments", tags=["organization"])
+
+
+# -----------------------------------------------------------------------------
+# Helpers
+# -----------------------------------------------------------------------------
+async def _agents_per_activity(db: AsyncSession) -> dict[uuid.UUID, int]:
+    """Conta agentes por activity_id."""
+    result = await db.execute(
+        select(Agent.activity_id, func.count(Agent.id))
+        .where(Agent.activity_id.isnot(None))
+        .group_by(Agent.activity_id)
+    )
+    return {row[0]: row[1] for row in result.all()}
+
+
+async def _serialize_department(db: AsyncSession, dept: Department) -> DepartmentOut:
+    """Serializa Department com squads, activities e contagem de agentes."""
+    counts = await _agents_per_activity(db)
+    total_agents = 0
+    squads_out = []
+    for squad in sorted(dept.squads, key=lambda s: s.position):
+        activities_out = []
+        for act in sorted(squad.activities, key=lambda a: a.position):
+            count = counts.get(act.id, 0)
+            total_agents += count
+            activities_out.append(ActivityOut(
+                id=act.id, squad_id=act.squad_id, name=act.name,
+                display_name=act.display_name, skill_code=act.skill_code,
+                target_agent_count=act.target_agent_count, position=act.position,
+                agent_count=count, created_at=act.created_at, updated_at=act.updated_at,
+            ))
+        squads_out.append(SquadOut(
+            id=squad.id, department_id=squad.department_id, name=squad.name,
+            display_name=squad.display_name, position=squad.position,
+            activities=activities_out, created_at=squad.created_at, updated_at=squad.updated_at,
+        ))
+
+    return DepartmentOut(
+        id=dept.id, name=dept.name, display_name=dept.display_name,
+        objective=dept.objective, owner_user_id=dept.owner_user_id,
+        monthly_cost_budget_usd=dept.monthly_cost_budget_usd, health=dept.health,
+        squads=squads_out, total_agents=total_agents,
+        created_at=dept.created_at, updated_at=dept.updated_at,
+    )
+
+
+async def _load_department(db: AsyncSession, department_id: uuid.UUID) -> Department:
+    """Carrega Department + squads + activities (sem ORM relationships, manual)."""
+    dept_result = await db.execute(select(Department).where(Department.id == department_id))
+    dept = dept_result.scalar_one_or_none()
+    if not dept:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Department não encontrado")
+    squads_result = await db.execute(select(Squad).where(Squad.department_id == dept.id))
+    dept.squads = list(squads_result.scalars().all())  # type: ignore[attr-defined]
+    for squad in dept.squads:  # type: ignore[attr-defined]
+        acts = await db.execute(select(Activity).where(Activity.squad_id == squad.id))
+        squad.activities = list(acts.scalars().all())  # type: ignore[attr-defined]
+    return dept
+
+
+# -----------------------------------------------------------------------------
+# Departments CRUD
+# -----------------------------------------------------------------------------
+@router.post("", response_model=DepartmentOut, status_code=status.HTTP_201_CREATED)
+async def create_department(
+    payload: DepartmentCreate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> DepartmentOut:
+    existing = await db.execute(select(Department).where(Department.name == payload.name))
+    if existing.scalar_one_or_none():
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="Já existe department com esse nome")
+
+    dept = Department(
+        name=payload.name,
+        display_name=payload.display_name,
+        objective=payload.objective,
+        owner_user_id=payload.owner_user_id,
+        monthly_cost_budget_usd=payload.monthly_cost_budget_usd,
+        health=payload.health,
+    )
+    db.add(dept)
+    await db.flush()
+
+    bus = EventBus(db)
+    await bus.emit(
+        type="department.created",
+        aggregate_id=str(dept.id),
+        aggregate_type="department",
+        payload={"name": dept.name, "display_name": dept.display_name},
+        metadata={"actor": str(user.id)},
+    )
+    await db.commit()
+    await db.refresh(dept)
+    dept.squads = []
+    return await _serialize_department(db, dept)
+
+
+@router.get("", response_model=list[DepartmentOut])
+async def list_departments(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[DepartmentOut]:
+    result = await db.execute(select(Department).order_by(Department.created_at))
+    depts = list(result.scalars().all())
+    out = []
+    for dept in depts:
+        loaded = await _load_department(db, dept.id)
+        out.append(await _serialize_department(db, loaded))
+    return out
+
+
+@router.get("/{department_id}", response_model=DepartmentOut)
+async def get_department(
+    department_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> DepartmentOut:
+    dept = await _load_department(db, department_id)
+    return await _serialize_department(db, dept)
+
+
+@router.patch("/{department_id}", response_model=DepartmentOut)
+async def update_department(
+    department_id: uuid.UUID,
+    payload: DepartmentUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> DepartmentOut:
+    result = await db.execute(select(Department).where(Department.id == department_id))
+    dept = result.scalar_one_or_none()
+    if not dept:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Department não encontrado")
+
+    changes = payload.model_dump(exclude_unset=True)
+    for k, v in changes.items():
+        setattr(dept, k, v)
+
+    bus = EventBus(db)
+    await bus.emit(
+        type="department.updated",
+        aggregate_id=str(dept.id),
+        aggregate_type="department",
+        payload={"changed_fields": list(changes.keys())},
+        metadata={"actor": str(user.id)},
+    )
+    await db.commit()
+    loaded = await _load_department(db, department_id)
+    return await _serialize_department(db, loaded)
+
+
+@router.delete("/{department_id}")
+async def delete_department(
+    department_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    result = await db.execute(select(Department).where(Department.id == department_id))
+    dept = result.scalar_one_or_none()
+    if not dept:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Department não encontrado")
+
+    bus = EventBus(db)
+    await bus.emit(
+        type="department.deleted",
+        aggregate_id=str(dept.id),
+        aggregate_type="department",
+        payload={"name": dept.name},
+        metadata={"actor": str(user.id)},
+    )
+    await db.delete(dept)
+    await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# -----------------------------------------------------------------------------
+# Squads (aninhados em /departments/{id}/squads)
+# -----------------------------------------------------------------------------
+@router.post("/{department_id}/squads", response_model=SquadOut, status_code=status.HTTP_201_CREATED)
+async def create_squad(
+    department_id: uuid.UUID,
+    payload: SquadCreate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> SquadOut:
+    dept_check = await db.execute(select(Department.id).where(Department.id == department_id))
+    if not dept_check.scalar_one_or_none():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Department não encontrado")
+
+    squad = Squad(
+        department_id=department_id,
+        name=payload.name,
+        display_name=payload.display_name,
+        position=payload.position,
+    )
+    db.add(squad)
+    await db.flush()
+
+    bus = EventBus(db)
+    await bus.emit(
+        type="squad.created",
+        aggregate_id=str(squad.id),
+        aggregate_type="squad",
+        payload={"department_id": str(department_id), "name": squad.name},
+        metadata={"actor": str(user.id)},
+    )
+    await db.commit()
+    await db.refresh(squad)
+    squad.activities = []
+    return SquadOut.model_validate(squad)
+
+
+@router.patch("/{department_id}/squads/{squad_id}", response_model=SquadOut)
+async def update_squad(
+    department_id: uuid.UUID,
+    squad_id: uuid.UUID,
+    payload: SquadUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> SquadOut:
+    result = await db.execute(
+        select(Squad).where(Squad.id == squad_id, Squad.department_id == department_id)
+    )
+    squad = result.scalar_one_or_none()
+    if not squad:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Squad não encontrado")
+    changes = payload.model_dump(exclude_unset=True)
+    for k, v in changes.items():
+        setattr(squad, k, v)
+    await db.commit()
+    await db.refresh(squad)
+    acts_result = await db.execute(select(Activity).where(Activity.squad_id == squad.id))
+    squad.activities = list(acts_result.scalars().all())
+    return SquadOut.model_validate(squad)
+
+
+@router.delete("/{department_id}/squads/{squad_id}")
+async def delete_squad(
+    department_id: uuid.UUID,
+    squad_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    result = await db.execute(
+        select(Squad).where(Squad.id == squad_id, Squad.department_id == department_id)
+    )
+    squad = result.scalar_one_or_none()
+    if not squad:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Squad não encontrado")
+    await db.delete(squad)
+    await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# -----------------------------------------------------------------------------
+# Activities (aninhados em /departments/{id}/squads/{sid}/activities)
+# -----------------------------------------------------------------------------
+@router.post(
+    "/{department_id}/squads/{squad_id}/activities",
+    response_model=ActivityOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_activity(
+    department_id: uuid.UUID,
+    squad_id: uuid.UUID,
+    payload: ActivityCreate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> ActivityOut:
+    sq_check = await db.execute(
+        select(Squad.id).where(Squad.id == squad_id, Squad.department_id == department_id)
+    )
+    if not sq_check.scalar_one_or_none():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Squad não encontrado")
+
+    activity = Activity(
+        squad_id=squad_id,
+        name=payload.name,
+        display_name=payload.display_name,
+        skill_code=payload.skill_code,
+        target_agent_count=payload.target_agent_count,
+        position=payload.position,
+    )
+    db.add(activity)
+    await db.commit()
+    await db.refresh(activity)
+    return ActivityOut.model_validate(activity)
+
+
+@router.patch(
+    "/{department_id}/squads/{squad_id}/activities/{activity_id}",
+    response_model=ActivityOut,
+)
+async def update_activity(
+    department_id: uuid.UUID,
+    squad_id: uuid.UUID,
+    activity_id: uuid.UUID,
+    payload: ActivityUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> ActivityOut:
+    result = await db.execute(
+        select(Activity).where(Activity.id == activity_id, Activity.squad_id == squad_id)
+    )
+    activity = result.scalar_one_or_none()
+    if not activity:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Activity não encontrada")
+    changes = payload.model_dump(exclude_unset=True)
+    for k, v in changes.items():
+        setattr(activity, k, v)
+    await db.commit()
+    await db.refresh(activity)
+    return ActivityOut.model_validate(activity)
+
+
+@router.delete(
+    "/{department_id}/squads/{squad_id}/activities/{activity_id}"
+)
+async def delete_activity(
+    department_id: uuid.UUID,
+    squad_id: uuid.UUID,
+    activity_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    result = await db.execute(
+        select(Activity).where(Activity.id == activity_id, Activity.squad_id == squad_id)
+    )
+    activity = result.scalar_one_or_none()
+    if not activity:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Activity não encontrada")
+    await db.delete(activity)
+    await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

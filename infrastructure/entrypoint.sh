@@ -58,14 +58,22 @@ except Exception:
 done
 echo "[entrypoint] Postgres OK."
 
-# Roda migrations (com advisory lock pra evitar race entre múltiplos containers)
-echo "[entrypoint] Rodando migrations..."
+# Roda migrations Alembic (com advisory lock pra evitar race entre containers)
+echo "[entrypoint] Rodando migrations Postgres (Alembic)..."
 cd /app
 if [ -f "alembic.ini" ]; then
     alembic upgrade head
-    echo "[entrypoint] Migrations OK."
+    echo "[entrypoint] Migrations Postgres OK."
 else
-    echo "[entrypoint] alembic.ini não encontrado — pulando migrations (provavelmente Sprint 1 ainda não foi implementado)."
+    echo "[entrypoint] alembic.ini não encontrado — pulando migrations Postgres."
+fi
+
+# Aplica schema ClickHouse (idempotente — CREATE IF NOT EXISTS)
+echo "[entrypoint] Aplicando schema ClickHouse..."
+if python -c "from intelliforce.clickhouse.client import apply_schema; apply_schema()" 2>&1; then
+    echo "[entrypoint] Schema ClickHouse OK."
+else
+    echo "[entrypoint] AVISO: falha ao aplicar schema ClickHouse — continuando assim mesmo."
 fi
 
 # Volta pro workdir e executa o comando passado

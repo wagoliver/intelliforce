@@ -48,9 +48,10 @@ RUN pip install --no-cache-dir --upgrade pip \
 # Copia código da aplicação
 COPY worker/ /app/
 
-# Configuração do OpenCode será montada via volume em /workspace/opencode
+# /workspace/opencode é a fonte (volume read-only). /opencode-runtime é onde o
+# entrypoint copia + substitui placeholders {env:VAR} antes de o app rodar.
 WORKDIR /workspace
-ENV OPENCODE_CONFIG_PATH=/workspace/opencode \
+ENV OPENCODE_CONFIG_PATH=/opencode-runtime \
     PYTHONPATH=/app \
     PYTHONUNBUFFERED=1
 

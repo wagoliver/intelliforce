@@ -171,6 +171,29 @@ services:
       - "8000"
       - "--proxy-headers"
 
+  # ---------------------------------------------------------------------------
+  # Web IntelliForce (Next.js — painel)
+  # ---------------------------------------------------------------------------
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    image: intelliforce-web:latest
+    container_name: intelliforce-web
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000     # browser → host
+      API_URL_INTERNAL: http://api:8000              # server-side dentro do container
+      NEXT_PUBLIC_BASE_URL: http://localhost:3000
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - intelliforce-net
+
 # =============================================================================
 # Volumes persistentes
 # =============================================================================

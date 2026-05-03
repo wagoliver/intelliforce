@@ -9,8 +9,15 @@ set -euo pipefail
 echo "[entrypoint] Iniciando IntelliForce..."
 
 # -----------------------------------------------------------------------------
-# Prepara runtime do OpenCode em /opencode-runtime (writable)
-# Copia config do volume read-only e substitui placeholders {env:VAR}
+# Prepara runtime do OpenCode em /opencode-runtime
+#
+# Estratégia (após mover o mount de :ro pra writable):
+#   - opencode.json   → COPIADO em runtime (precisa de env substitution sem
+#                       poluir o arquivo do host com secrets)
+#   - .opencode/      → SYMLINK pro mount writable (agents/skills/commands
+#                       criados pelo builder agent persistem no host repo)
+#
+# Resultado: skills criadas via chat sobrevivem a `docker compose up --build`.
 # -----------------------------------------------------------------------------
 RUNTIME_DIR=/opencode-runtime
 SOURCE_DIR=/workspace/opencode
@@ -19,11 +26,21 @@ if [ -d "$SOURCE_DIR" ]; then
     echo "[entrypoint] Preparando runtime OpenCode em $RUNTIME_DIR..."
     rm -rf "$RUNTIME_DIR"
     mkdir -p "$RUNTIME_DIR"
-    cp -r "$SOURCE_DIR"/. "$RUNTIME_DIR"/
+
+    # Copia apenas opencode.json (writable em runtime, recebe env substitution)
+    if [ -f "$SOURCE_DIR/opencode.json" ]; then
+        cp "$SOURCE_DIR/opencode.json" "$RUNTIME_DIR/opencode.json"
+    fi
+
+    # Symlink da pasta .opencode (agents/skills/commands) → mount writable.
+    # OpenCode CLI lê e escreve aqui; tudo que for escrito persiste no host.
+    if [ -d "$SOURCE_DIR/.opencode" ]; then
+        ln -sfn "$SOURCE_DIR/.opencode" "$RUNTIME_DIR/.opencode"
+    fi
 
     # Substitui {env:VAR_NAME} pelos valores reais das variáveis de ambiente
+    # (só no opencode.json runtime — não no arquivo do host).
     if [ -f "$RUNTIME_DIR/opencode.json" ]; then
-        # Extrai todas as variáveis no formato {env:VAR} e substitui
         for var in $(grep -oE '\{env:[A-Z_]+\}' "$RUNTIME_DIR/opencode.json" | sort -u); do
             var_name=$(echo "$var" | sed 's/{env:\(.*\)}/\1/')
             var_value="${!var_name:-}"
@@ -35,7 +52,7 @@ if [ -d "$SOURCE_DIR" ]; then
     fi
 
     export OPENCODE_CONFIG_PATH="$RUNTIME_DIR"
-    echo "[entrypoint] OpenCode runtime pronto."
+    echo "[entrypoint] OpenCode runtime pronto (skills persistem em $SOURCE_DIR/.opencode)."
 else
     echo "[entrypoint] AVISO: $SOURCE_DIR não encontrado — pulando setup do OpenCode."
 fi

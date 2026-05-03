@@ -113,7 +113,7 @@ services:
       PYTHONPATH: /app
       PYTHONUNBUFFERED: "1"
     volumes:
-      - ./opencode:/workspace/opencode:ro          # config OpenCode (read-only)
+      - ./opencode:/workspace/opencode               # config OpenCode + skills (writable: builder agent grava aqui)
       - ./worker:/app:ro                           # código worker (read-only)
     extra_hosts:
       - "host.docker.internal:host-gateway"        # acesso ao host (LM Studio)
@@ -145,7 +145,7 @@ services:
       PYTHONPATH: /app
       PYTHONUNBUFFERED: "1"
     volumes:
-      - ./opencode:/workspace/opencode:ro
+      - ./opencode:/workspace/opencode
       - ./worker:/app:ro
     ports:
       - "8000:8000"

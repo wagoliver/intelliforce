@@ -4,12 +4,10 @@
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 
-import { UserMenu } from "@/components/user-menu";
 import { agents as agentsApi, instances as instancesApi } from "@/lib/api/agents";
 import { departments as deptsApi, people as peopleApi, type DepartmentOut, type ActivityOut } from "@/lib/api/departments";
 import type { Agent } from "@/lib/api/types";
 
-import "./home-v2.css";
 import "./department-setup.css";
 
 // =============================================================================
@@ -51,35 +49,33 @@ export default function SetupPage() {
   const selected = depts.find((d) => d.id === selectedDeptId);
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
-      <main style={{ padding: "32px 48px", maxWidth: 1400, margin: "0 auto" }}>
-        <SetupHeader onNew={() => setShowNewDept(true)} />
+    <>
+      <SetupHeader onNew={() => setShowNewDept(true)} />
 
-        <div style={{ display: "grid", gridTemplateColumns: "260px minmax(0, 1fr)", gap: 24, marginTop: 32, alignItems: "start" }}>
-          <DeptList depts={depts} selectedId={selectedDeptId} onSelect={setSelectedDeptId} loading={loading} />
-          <div style={{ minWidth: 0 }}>
-            {selected ? (
-              <DeptEditor
-                dept={selected}
-                agents={agentDefs}
-                people={people}
-                onChange={reload}
-              />
-            ) : (
-              <EmptyDept onNew={() => setShowNewDept(true)} />
-            )}
-          </div>
+      <div style={{ display: "grid", gridTemplateColumns: "260px minmax(0, 1fr)", gap: 24, marginTop: 32, alignItems: "start" }}>
+        <DeptList depts={depts} selectedId={selectedDeptId} onSelect={setSelectedDeptId} loading={loading} />
+        <div style={{ minWidth: 0 }}>
+          {selected ? (
+            <DeptEditor
+              dept={selected}
+              agents={agentDefs}
+              people={people}
+              onChange={reload}
+            />
+          ) : (
+            <EmptyDept onNew={() => setShowNewDept(true)} />
+          )}
         </div>
+      </div>
 
-        {showNewDept && (
-          <NewDeptModal
-            people={people}
-            onClose={() => setShowNewDept(false)}
-            onCreated={(id) => { setShowNewDept(false); setSelectedDeptId(id); reload(); }}
-          />
-        )}
-      </main>
-    </div>
+      {showNewDept && (
+        <NewDeptModal
+          people={people}
+          onClose={() => setShowNewDept(false)}
+          onCreated={(id) => { setShowNewDept(false); setSelectedDeptId(id); reload(); }}
+        />
+      )}
+    </>
   );
 }
 
@@ -90,13 +86,10 @@ function SetupHeader({ onNew }: { onNew: () => void }) {
   const t = useTranslations("setup");
   return (
     <header>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ fontSize: 12, color: "var(--text-subtle)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
-          <a href="/dashboard" style={{ color: "inherit", textDecoration: "none" }}>← {t("breadcrumb_workforce")}</a>
-          <span style={{ margin: "0 8px" }}>/</span>
-          <span>{t("breadcrumb_setup")}</span>
-        </div>
-        <UserMenu userName="Wagner" userOrg="Arctica" userRole="admin" />
+      <div style={{ fontSize: 12, color: "var(--text-subtle)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+        <a href="/dashboard" style={{ color: "inherit", textDecoration: "none" }}>← {t("breadcrumb_workforce")}</a>
+        <span style={{ margin: "0 8px" }}>/</span>
+        <span>{t("breadcrumb_setup")}</span>
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginTop: 12 }}>
         <div>

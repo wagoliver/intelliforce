@@ -4,16 +4,8 @@
 import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useState } from "react";
 
-import { UserMenu } from "@/components/user-menu";
 import { departments as deptsApi, type DepartmentOut } from "@/lib/api/departments";
 import { metrics as metricsApi, formatHandle, type DepartmentMetricsOut, type TaskHistoryItem, type TimelineBucket, type RecentExecution } from "@/lib/api/metrics";
-
-import "./home-v2.css";
-
-// ===== User data (futuro: vem do contexto auth) =====
-const data = {
-  user: { name: "Wagner", role: "Operations builder", org: "Arctica" },
-};
 
 // Converte DepartmentOut do backend pro shape esperado pelo render do mockup.
 // `metrics` é populado depois via fetch a /metrics/department/{id}.
@@ -192,13 +184,6 @@ const ORG = [
   },
 ];
 
-// ===== Brand mark =====
-const BrandMark = () => (
-  <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-    <path d="M10 10 H54 V54 H10 Z M22 22 V42 H42 V22 Z" fill="currentColor" fillRule="evenodd" />
-  </svg>
-);
-
 function AgentTile({ status = "active", size = 14, skill }: any) {
   const colors: any = {
     active: "oklch(0.48 0.20 155)",        // verde forte — executando agora
@@ -255,77 +240,6 @@ const Ico: any = {
 const SvgIcon = ({ name, ...rest }: any) => (
   <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" {...rest}>{Ico[name]}</svg>
 );
-
-function Sidebar({ collapsed, onToggle }: any) {
-  const t = useTranslations("nav");
-  const ops = [
-    { id: "home", name: t("home"), icon: "home", active: true, href: "/dashboard" },
-    { id: "org", name: t("organization"), icon: "org", href: "/dashboard" },
-    { id: "agents", name: t("agents"), icon: "agents", href: "/agents" },
-    { id: "proc", name: t("processes"), icon: "proc", href: "/tasks" },
-    { id: "queue", name: t("queue"), icon: "queue", href: "/tasks" },
-  ];
-  const config = [
-    { id: "intg", name: t("integrations"), icon: "intg", href: "/audit" },
-    { id: "people", name: t("people"), icon: "people", href: "/approvals" },
-    { id: "insights", name: t("insights"), icon: "insights", href: "/audit" },
-    { id: "set", name: t("settings"), icon: "set", href: "/setup" },
-  ];
-  return (
-    <aside className={`sidebar ${collapsed ? "is-collapsed" : ""}`}>
-      <div className="sb-brand">
-        <div className="sb-brand-mark"><BrandMark /></div>
-        {!collapsed && <div className="sb-brand-name">IntelliForce</div>}
-        <button className="sb-toggle" onClick={onToggle} title={collapsed ? "Expand menu" : "Collapse menu"}>
-          <SvgIcon className="ico" name={collapsed ? "menuRight" : "menuLeft"} />
-        </button>
-      </div>
-      {!collapsed && <div className="sb-org">{data.user.org}</div>}
-
-      <nav className="sb-nav">
-        {ops.map(i => <NavItem key={i.id} {...i} collapsed={collapsed} />)}
-        {!collapsed && <div className="sb-section-label">Configure</div>}
-        {collapsed && <div className="sb-divider" />}
-        {config.map(i => <NavItem key={i.id} {...i} collapsed={collapsed} />)}
-      </nav>
-    </aside>
-  );
-}
-
-function NavItem({ name, icon, badge, active, collapsed, href }: any) {
-  return (
-    <a href={href} className={`sb-item ${active ? "active" : ""}`} title={collapsed ? name : undefined}>
-      <SvgIcon className="ico" name={icon} />
-      {!collapsed && <span>{name}</span>}
-      {!collapsed && badge && <span className="badge">{badge}</span>}
-    </a>
-  );
-}
-
-function TopBar() {
-  const tc = useTranslations("common");
-  const tn = useTranslations("nav");
-  return (
-    <div className="topbar">
-      <div className="tb-search">
-        <SvgIcon className="ico" name="search" />
-        <span>{tc("search_placeholder")}</span>
-        <kbd>⌘ K</kbd>
-      </div>
-      <div className="tb-actions">
-        <button className="tb-iconbtn" title={tn("toggle_theme")}>
-          <SvgIcon className="ico" name="theme" />
-        </button>
-        <button className="tb-iconbtn" title={tn("notifications")}>
-          <SvgIcon className="ico" name="bell" />
-          <span className="tb-iconbtn-dot" />
-        </button>
-        <div className="tb-divider" />
-        <UserMenu userName={data.user.name} userOrg={data.user.org} userRole={data.user.role} />
-      </div>
-    </div>
-  );
-}
 
 function OrgHeader({ orgList }: { orgList: any[] }) {
   const t = useTranslations("dashboard");
@@ -518,22 +432,62 @@ function DepartmentRow({ dept }: any) {
 
 function HistorySection({ history }: { history: any }) {
   const t = useTranslations("dashboard");
+  const failedCount = useMemo(
+    () => (history ?? []).filter((h: any) => h.status === "failed").length,
+    [history],
+  );
+  const [open, setOpen] = useState(false);
+  const [userToggled, setUserToggled] = useState(false);
+
+  // Abre automático se aparecer falha — a menos que o usuário já tenha mexido manualmente.
+  useEffect(() => {
+    if (!userToggled && failedCount > 0) setOpen(true);
+  }, [failedCount, userToggled]);
+
   if (history === null) return null;
+
+  const toggle = () => {
+    setUserToggled(true);
+    setOpen((v) => !v);
+  };
+
   return (
     <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid var(--border)" }}>
-      <div style={{
-        fontSize: 11, color: "var(--text-subtle)", letterSpacing: "0.06em",
-        textTransform: "uppercase", fontWeight: 600, marginBottom: 8,
-      }}>
-        {t("history_title")} ({history.length})
-      </div>
-      {history.length === 0 ? (
+      <button
+        type="button"
+        onClick={toggle}
+        aria-expanded={open}
+        style={{
+          all: "unset", cursor: "pointer", width: "100%",
+          display: "flex", alignItems: "center", gap: 6,
+          fontSize: 11, color: "var(--text-subtle)", letterSpacing: "0.06em",
+          textTransform: "uppercase", fontWeight: 600,
+          marginBottom: open ? 8 : 0,
+        }}
+      >
+        <SvgIcon
+          className="ico"
+          name="chev"
+          style={{
+            width: 12, height: 12,
+            transform: open ? "rotate(0deg)" : "rotate(-90deg)",
+            transition: "transform 120ms ease",
+          }}
+        />
+        <span>{t("history_title")} ({history.length})</span>
+        {failedCount > 0 && (
+          <span style={{ color: "var(--danger)", textTransform: "none", letterSpacing: 0 }}>
+            · {t("failed_count", { n: failedCount })}
+          </span>
+        )}
+      </button>
+      {!open ? null : history.length === 0 ? (
         <div style={{ fontSize: 12, color: "var(--text-muted)", padding: "4px 0" }}>
           {t("history_empty")}
         </div>
       ) : (
         <div style={{ maxHeight: 180, overflow: "auto", display: "grid", gap: 4 }}>
-          {history.map((h) => (
+          {history.map((h: any) => (
             <div key={h.task_id} style={{
               display: "grid", gridTemplateColumns: "auto 1fr auto auto",
               gap: 10, alignItems: "center",
@@ -550,8 +504,16 @@ function HistorySection({ history }: { history: any }) {
                   </div>
                 )}
               </div>
-              <span style={{ color: "var(--text-subtle)", fontFamily: "var(--font-mono)" }}>
-                {h.duration_seconds != null ? `${h.duration_seconds.toFixed(1)}s` : "—"}
+              <span style={{
+                color: h.status === "running" ? "var(--accent)" : "var(--text-subtle)",
+                fontFamily: "var(--font-mono)",
+              }}>
+                {h.duration_seconds != null
+                  ? `${h.duration_seconds.toFixed(1)}s`
+                  : h.status === "running" ? t("status_running")
+                  : h.status === "pending" ? t("status_pending")
+                  : h.status === "awaiting_approval" ? t("status_awaiting_approval")
+                  : "—"}
               </span>
               <span style={{ color: "var(--text-subtle)", fontFamily: "var(--font-mono)" }}>
                 {new Date(h.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
@@ -567,7 +529,7 @@ function HistorySection({ history }: { history: any }) {
 function StatusDot({ status }: { status: string }) {
   const color: Record<string, string> = {
     completed: "oklch(0.48 0.20 155)",
-    running: "oklch(0.48 0.20 155)",
+    running: "var(--accent)",
     pending: "oklch(0.78 0.005 250)",
     awaiting_approval: "oklch(0.58 0.18 290)",
     failed: "var(--danger)",
@@ -643,7 +605,7 @@ function AlphaDots({ activityId }: { activityId: string }) {
   const colors: Record<string, string> = {
     completed: "oklch(0.48 0.20 155)",
     failed: "var(--danger)",
-    running: "oklch(0.48 0.20 155)",
+    running: "var(--accent)",
     pending: "oklch(0.78 0.005 250)",
     cancelled: "var(--text-subtle)",
     awaiting_approval: "oklch(0.58 0.18 290)",
@@ -671,20 +633,16 @@ function AlphaDots({ activityId }: { activityId: string }) {
 }
 
 export default function HomeV2Page() {
-  const [collapsed, setCollapsed] = useState(false);
   const orgState = useState(null);
   const orgData = orgState[0];
   const setOrgData = orgState[1];
   const [loading, setLoading] = useState(true);
-
-  // Tema vem do cookie, aplicado em layout.tsx — não forçar aqui
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
       try {
         const list = await deptsApi.list();
-        // Busca métricas reais de cada department em paralelo
         const withMetrics = await Promise.all(
           list.map(async (d) => {
             const m = await metricsApi.department(d.id).catch(() => null);
@@ -706,24 +664,16 @@ export default function HomeV2Page() {
   const orgList = orgData ?? [];
 
   return (
-    <div className={`app ${collapsed ? "sidebar-collapsed" : ""}`}>
-      <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((c: boolean) => !c)} />
-      <main>
-        <TopBar />
-        <div className="canvas">
-          <OrgHeader orgList={orgList} />
-          {loading && <DashboardLoading />}
-          {!loading && orgList.length === 0 && (
-            <EmptyState />
-          )}
-          {!loading && orgList.length > 0 && (
-            <div className="dept-list">
-              {orgList.map((d: any) => <DepartmentRow key={d.id} dept={d} />)}
-            </div>
-          )}
+    <>
+      <OrgHeader orgList={orgList} />
+      {loading && <DashboardLoading />}
+      {!loading && orgList.length === 0 && <EmptyState />}
+      {!loading && orgList.length > 0 && (
+        <div className="dept-list">
+          {orgList.map((d: any) => <DepartmentRow key={d.id} dept={d} />)}
         </div>
-      </main>
-    </div>
+      )}
+    </>
   );
 }
 

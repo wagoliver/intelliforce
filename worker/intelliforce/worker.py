@@ -1,7 +1,10 @@
-"""IntelliForce Worker — entrypoint principal.
+"""IntelliForce Worker — orquestrador principal.
 
-Sprint 3: event-driven backbone — outbox publisher + subscribers concorrentes.
-Sprint 4 (futura): consumer real de task.created → execução via OpenCode.
+Roda em paralelo:
+  - OutboxPublisher: lê events table, publica em Redis Streams
+  - DebugSubscriber: loga eventos (debug)
+  - TaskExecutor: consome task.created, dispara OpenCode
+  - CronScheduler: agenda execução de agents com schedule definido
 """
 import asyncio
 import logging
@@ -11,19 +14,19 @@ from contextlib import suppress
 
 import structlog
 
+from intelliforce.audit import AuditProjector
 from intelliforce.db.base import async_session_factory
 from intelliforce.events import EventBus, OutboxPublisher
 from intelliforce.events.subscriber import DebugSubscriber
+from intelliforce.scheduler import CronScheduler
 from intelliforce.settings import get_settings
+from intelliforce.workers import TaskExecutor
 
 
 def setup_logging() -> None:
-    """Configura logging estruturado JSON."""
     settings = get_settings()
     log_level = getattr(logging, settings.log_level.upper(), logging.INFO)
-
     logging.basicConfig(format="%(message)s", level=log_level)
-
     structlog.configure(
         processors=[
             structlog.stdlib.add_log_level,
@@ -38,7 +41,7 @@ def setup_logging() -> None:
 
 
 # -----------------------------------------------------------------------------
-# Validações de conexão
+# Validações
 # -----------------------------------------------------------------------------
 async def validate_postgres() -> bool:
     log = structlog.get_logger()
@@ -84,9 +87,6 @@ async def validate_redis() -> bool:
         return False
 
 
-# -----------------------------------------------------------------------------
-# Emite evento de inicialização (testa o fluxo end-to-end do event bus)
-# -----------------------------------------------------------------------------
 async def emit_startup_event() -> None:
     log = structlog.get_logger()
     try:
@@ -96,7 +96,7 @@ async def emit_startup_event() -> None:
                 type="system.worker_started",
                 aggregate_id="worker-main",
                 aggregate_type="system",
-                payload={"version": "0.1.0", "sprint": "3"},
+                payload={"version": "0.1.0", "sprint": "5"},
                 metadata={"actor": "worker"},
             )
             await session.commit()
@@ -106,7 +106,7 @@ async def emit_startup_event() -> None:
 
 
 # -----------------------------------------------------------------------------
-# Loop principal — rodando publisher + subscriber em paralelo
+# Main
 # -----------------------------------------------------------------------------
 async def main() -> None:
     settings = get_settings()
@@ -115,7 +115,7 @@ async def main() -> None:
     log.info(
         "worker.starting",
         version="0.1.0",
-        sprint="3",
+        sprint="5",
         environment=settings.app_env,
     )
     log.info(
@@ -128,7 +128,6 @@ async def main() -> None:
         redis_host=settings.redis_host,
     )
 
-    # Valida conexões (não-bloqueante — segue mesmo se falhar; tarefa principal vai retentar)
     pg_ok = await validate_postgres()
     ch_ok = validate_clickhouse()
     rd_ok = await validate_redis()
@@ -139,22 +138,25 @@ async def main() -> None:
         redis=rd_ok,
     )
 
-    # Emite evento de startup pra validar fluxo
     await emit_startup_event()
 
-    # Componentes que rodam em paralelo
-    publisher = OutboxPublisher(
-        batch_size=100,
-        poll_interval_seconds=settings.worker_poll_interval_seconds,
-    )
+    # Componentes paralelos
+    publisher = OutboxPublisher(batch_size=100, poll_interval_seconds=settings.worker_poll_interval_seconds)
     debug_subscriber = DebugSubscriber()
+    task_executor = TaskExecutor()
+    audit_projector = AuditProjector()
+    scheduler = CronScheduler(sync_interval_seconds=30)
 
-    tasks: list[asyncio.Task] = []
-    tasks.append(asyncio.create_task(publisher.run_forever(), name="outbox-publisher"))
-    tasks.append(asyncio.create_task(debug_subscriber.run_forever(), name="debug-subscriber"))
-    tasks.append(asyncio.create_task(_heartbeat_loop(), name="heartbeat"))
+    tasks: list[asyncio.Task] = [
+        asyncio.create_task(publisher.run_forever(), name="outbox-publisher"),
+        asyncio.create_task(debug_subscriber.run_forever(), name="debug-subscriber"),
+        asyncio.create_task(task_executor.run_forever(), name="task-executor"),
+        asyncio.create_task(audit_projector.run_forever(), name="audit-projector"),
+        asyncio.create_task(scheduler.start(), name="cron-scheduler"),
+        asyncio.create_task(_heartbeat_loop(), name="heartbeat"),
+    ]
 
-    # Shutdown gracioso em SIGTERM/SIGINT
+    # Shutdown gracioso
     loop = asyncio.get_running_loop()
     stop_event = asyncio.Event()
 
@@ -172,6 +174,9 @@ async def main() -> None:
     log.info("worker.shutdown_initiated")
     await publisher.stop()
     await debug_subscriber.stop()
+    await task_executor.stop()
+    await audit_projector.stop()
+    await scheduler.stop()
     for t in tasks:
         t.cancel()
     await asyncio.gather(*tasks, return_exceptions=True)

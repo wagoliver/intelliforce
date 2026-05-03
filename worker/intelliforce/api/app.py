@@ -7,7 +7,7 @@ import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from intelliforce.api.routes import agents, auth, health, tasks
+from intelliforce.api.routes import agents, approvals, audit, auth, health, tasks
 from intelliforce.settings import get_settings
 
 
@@ -53,6 +53,8 @@ def create_app() -> FastAPI:
     app.include_router(auth.router)
     app.include_router(agents.router)
     app.include_router(tasks.router)
+    app.include_router(approvals.router)
+    app.include_router(audit.router)
 
     @app.on_event("startup")
     async def _on_startup() -> None:

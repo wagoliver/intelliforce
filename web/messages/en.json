@@ -45,6 +45,7 @@
   },
   "nav": {
     "home": "Home",
+    "skills": "Skill",
     "logout": "Logout",
     "toggle_theme": "Toggle theme",
     "notifications": "Notifications"
@@ -52,7 +53,7 @@
   "dashboard": {
     "eyebrow": "Your digital workforce",
     "title_a": "departments,",
-    "title_b": "digital employees on payroll.",
+    "title_b": "digital employees in operation.",
     "active_now": "Active right now",
     "monthly_cost": "Monthly cost",
     "avg_sla": "Avg. SLA",

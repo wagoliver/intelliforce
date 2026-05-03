@@ -45,6 +45,7 @@
   },
   "nav": {
     "home": "Início",
+    "skills": "Skill",
     "logout": "Sair",
     "toggle_theme": "Alternar tema",
     "notifications": "Notificações"
@@ -52,7 +53,7 @@
   "dashboard": {
     "eyebrow": "Sua força de trabalho digital",
     "title_a": "departamentos,",
-    "title_b": "funcionários digitais na folha.",
+    "title_b": "funcionários digitais em operação.",
     "active_now": "Ativos agora",
     "monthly_cost": "Custo mensal",
     "avg_sla": "SLA médio",

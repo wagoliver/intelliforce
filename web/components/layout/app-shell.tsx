@@ -23,6 +23,7 @@ const BrandMark = () => (
 
 const Ico: any = {
   home: <path d="M3 9.5l5-5 5 5V13a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5z" stroke="currentColor" strokeWidth="1.4" fill="none" strokeLinejoin="round"/>,
+  skills: <path d="M8 2.5l5 2.5v3c0 3-2 5.5-5 6.5-3-1-5-3.5-5-6.5V5l5-2.5z" stroke="currentColor" strokeWidth="1.4" fill="none"/>,
   search: <g stroke="currentColor" strokeWidth="1.4" fill="none"><circle cx="6.5" cy="6.5" r="3.5"/><path d="M9 9l3 3"/></g>,
   bell: <g stroke="currentColor" strokeWidth="1.4" fill="none"><path d="M4 11V7a4 4 0 0 1 8 0v4l1 1H3l1-1zM7 13h2"/></g>,
   theme: <g stroke="currentColor" strokeWidth="1.4" fill="none"><path d="M11 8.5A4 4 0 0 1 7.5 4 a4 4 0 1 0 3.5 4.5z"/></g>,
@@ -52,9 +53,9 @@ type NavEntry = {
 function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   const t = useTranslations("nav");
   const pathname = usePathname();
-  // Apenas a tela Home está disponível enquanto o resto do frontend é reconstruído sobre os endpoints reais.
   const ops: NavEntry[] = [
     { id: "home", name: t("home"), icon: "home", href: "/dashboard", match: ["/dashboard"] },
+    { id: "skills", name: t("skills"), icon: "skills", href: "/skills", match: ["/skills"] },
   ];
 
   function renderEntry(i: NavEntry) {

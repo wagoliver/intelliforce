@@ -2,19 +2,41 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { FileTree } from "./components/FileTree";
+import { SkillDrawer } from "./components/SkillDrawer";
 import { useChatStream } from "./hooks/useChatStream";
+import { useOpenCodeTree, type OpenCodeFile } from "./hooks/useOpenCodeTree";
 import type { ChatMessage, ToolCall } from "./state/types";
 
 export default function SkillsPage() {
   const { state, send } = useChatStream();
+  const { tree, loading: treeLoading, error: treeError, refetch } = useOpenCodeTree();
   const [input, setInput] = useState("");
-  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [selected, setSelected] = useState<{ kind: OpenCodeFile["kind"]; slug: string } | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
 
-  // Auto-scroll quando entra mensagem nova ou texto streaming
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const wasStreamingRef = useRef(false);
+  const refetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [state.messages]);
+
+  // Refetch tree quando stream termina (debounce 300ms)
+  useEffect(() => {
+    if (wasStreamingRef.current && !state.isStreaming) {
+      if (refetchTimerRef.current) clearTimeout(refetchTimerRef.current);
+      refetchTimerRef.current = setTimeout(() => {
+        void refetch();
+      }, 300);
+    }
+    wasStreamingRef.current = state.isStreaming;
+    return () => {
+      if (refetchTimerRef.current) clearTimeout(refetchTimerRef.current);
+    };
+  }, [state.isStreaming, refetch]);
 
   function onSubmit() {
     if (!input.trim() || state.isStreaming) return;
@@ -23,120 +45,144 @@ export default function SkillsPage() {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 900, margin: "0 auto" }}>
-      <header>
-        <h1
-          style={{
-            fontFamily: "var(--font-display)",
-            fontSize: 22,
-            fontWeight: 500,
-            margin: 0,
-            letterSpacing: "-0.015em",
-          }}
-        >
-          Skill · chat com OpenCode
-        </h1>
-        <p style={{ fontSize: 12, color: "var(--text-subtle)", marginTop: 4 }}>
-          Fase 2 (streaming SSE, sem visual cinematográfico ainda).
-        </p>
-      </header>
-
+    <>
       <div
-        ref={scrollRef}
         style={{
-          border: "1px solid var(--border)",
-          borderRadius: 8,
-          padding: 16,
-          minHeight: 360,
-          maxHeight: 540,
-          overflowY: "auto",
           display: "flex",
-          flexDirection: "column",
-          gap: 12,
-          background: "var(--bg-elev)",
+          gap: 16,
+          height: "calc(100vh - 180px)",
+          minHeight: 480,
         }}
       >
-        {state.messages.length === 0 && !state.isStreaming && (
-          <div style={{ color: "var(--text-subtle)", fontSize: 13 }}>
-            Sem mensagens. Manda um &quot;olá&quot; pra testar a conexão com OpenCode.
-          </div>
-        )}
-        {state.messages.map((m) => (
-          <MessageBubble key={m.id} message={m} />
-        ))}
-        {state.isStreaming && (
-          <div style={{ color: "var(--text-subtle)", fontSize: 12, fontStyle: "italic" }}>
-            OpenCode está pensando…
-          </div>
-        )}
-      </div>
-
-      {state.error && (
-        <div
-          role="alert"
-          style={{
-            color: "var(--danger)",
-            fontSize: 12.5,
-            padding: "8px 12px",
-            border: "1px solid var(--danger)",
-            borderRadius: 6,
-            background: "var(--danger-soft)",
-          }}
-        >
-          {state.error}
-        </div>
-      )}
-
-      <div style={{ display: "flex", gap: 8 }}>
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              onSubmit();
-            }
-          }}
-          placeholder="O que você quer construir?"
-          disabled={state.isStreaming}
-          style={{
-            flex: 1,
-            padding: "10px 14px",
-            border: "1px solid var(--border)",
-            borderRadius: 8,
-            fontSize: 14,
-            background: "var(--bg-elev)",
-            color: "var(--text)",
-            outline: "none",
-            fontFamily: "inherit",
-          }}
+        <FileTree
+          tree={tree}
+          loading={treeLoading}
+          error={treeError}
+          selected={selected}
+          collapsed={collapsed}
+          onSelect={(f) => setSelected({ kind: f.kind, slug: f.slug })}
+          onToggleCollapsed={() => setCollapsed((c) => !c)}
         />
-        <button
-          onClick={onSubmit}
-          disabled={state.isStreaming || !input.trim()}
-          style={{
-            padding: "10px 22px",
-            border: "1px solid var(--text)",
-            borderRadius: 8,
-            background: "var(--text)",
-            color: "var(--bg)",
-            fontSize: 14,
-            fontWeight: 500,
-            cursor: state.isStreaming || !input.trim() ? "not-allowed" : "pointer",
-            opacity: state.isStreaming || !input.trim() ? 0.55 : 1,
-            fontFamily: "inherit",
-          }}
-        >
-          Enviar
-        </button>
+
+        <main style={{ flex: 1, display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
+          <header>
+            <h1
+              style={{
+                fontFamily: "var(--font-display)",
+                fontSize: 22,
+                fontWeight: 500,
+                margin: 0,
+                letterSpacing: "-0.015em",
+              }}
+            >
+              Skill · chat com OpenCode
+            </h1>
+            <p style={{ fontSize: 12, color: "var(--text-subtle)", marginTop: 4 }}>
+              Fase 3 · file tree à esquerda + drawer no click · streaming em tempo real
+            </p>
+          </header>
+
+          <div
+            ref={scrollRef}
+            style={{
+              border: "1px solid var(--border)",
+              borderRadius: 8,
+              padding: 16,
+              flex: 1,
+              minHeight: 0,
+              overflowY: "auto",
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
+              background: "var(--bg-elev)",
+            }}
+          >
+            {state.messages.length === 0 && !state.isStreaming && (
+              <div style={{ color: "var(--text-subtle)", fontSize: 13 }}>
+                Sem mensagens. Manda um &quot;olá&quot; pra testar a conexão com OpenCode, ou peça pra
+                criar uma skill nova.
+              </div>
+            )}
+            {state.messages.map((m) => (
+              <MessageBubble key={m.id} message={m} />
+            ))}
+            {state.isStreaming && (
+              <div style={{ color: "var(--text-subtle)", fontSize: 12, fontStyle: "italic" }}>
+                OpenCode está pensando…
+              </div>
+            )}
+          </div>
+
+          {state.error && (
+            <div
+              role="alert"
+              style={{
+                color: "var(--danger)",
+                fontSize: 12.5,
+                padding: "8px 12px",
+                border: "1px solid var(--danger)",
+                borderRadius: 6,
+                background: "var(--danger-soft)",
+              }}
+            >
+              {state.error}
+            </div>
+          )}
+
+          <div style={{ display: "flex", gap: 8 }}>
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  onSubmit();
+                }
+              }}
+              placeholder="O que você quer construir?"
+              disabled={state.isStreaming}
+              style={{
+                flex: 1,
+                padding: "10px 14px",
+                border: "1px solid var(--border)",
+                borderRadius: 8,
+                fontSize: 14,
+                background: "var(--bg-elev)",
+                color: "var(--text)",
+                outline: "none",
+                fontFamily: "inherit",
+              }}
+            />
+            <button
+              onClick={onSubmit}
+              disabled={state.isStreaming || !input.trim()}
+              style={{
+                padding: "10px 22px",
+                border: "1px solid var(--text)",
+                borderRadius: 8,
+                background: "var(--text)",
+                color: "var(--bg)",
+                fontSize: 14,
+                fontWeight: 500,
+                cursor: state.isStreaming || !input.trim() ? "not-allowed" : "pointer",
+                opacity: state.isStreaming || !input.trim() ? 0.55 : 1,
+                fontFamily: "inherit",
+              }}
+            >
+              Enviar
+            </button>
+          </div>
+
+          {state.sessionId && (
+            <div style={{ fontSize: 11, color: "var(--text-subtle)", fontFamily: "var(--font-mono)" }}>
+              session: {state.sessionId}
+            </div>
+          )}
+        </main>
       </div>
 
-      {state.sessionId && (
-        <div style={{ fontSize: 11, color: "var(--text-subtle)", fontFamily: "var(--font-mono)" }}>
-          session: {state.sessionId}
-        </div>
-      )}
-    </div>
+      <SkillDrawer selected={selected} onClose={() => setSelected(null)} />
+    </>
   );
 }
 
@@ -215,7 +261,14 @@ function ToolCallLine({ call }: { call: ToolCall }) {
       <span style={{ width: 12, textAlign: "center" }}>{icon}</span>
       <span style={{ fontWeight: 500 }}>{call.tool}</span>
       {call.description && (
-        <span style={{ color: "var(--text-subtle)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <span
+          style={{
+            color: "var(--text-subtle)",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
           {call.description}
         </span>
       )}

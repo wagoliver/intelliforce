@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from intelliforce.api.routes import (
     agents, approvals, audit, auth, chat, departments, health,
-    instances, metrics, people, tasks,
+    instances, metrics, opencode, people, tasks,
 )
 from intelliforce.settings import get_settings
 
@@ -62,6 +62,7 @@ def create_app() -> FastAPI:
     app.include_router(departments.router)
     app.include_router(instances.router)
     app.include_router(metrics.router)
+    app.include_router(opencode.router)
     app.include_router(people.router)
 
     @app.on_event("startup")

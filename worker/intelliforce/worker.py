@@ -1,14 +1,19 @@
 """IntelliForce Worker — entrypoint principal.
 
-Sprint 1: schemas Postgres e ClickHouse aplicados, conexões validadas.
-Sprints futuras: consumir Redis Streams, invocar OpenCode CLI, persistir resultados.
+Sprint 3: event-driven backbone — outbox publisher + subscribers concorrentes.
+Sprint 4 (futura): consumer real de task.created → execução via OpenCode.
 """
 import asyncio
 import logging
+import signal
 import sys
+from contextlib import suppress
 
 import structlog
 
+from intelliforce.db.base import async_session_factory
+from intelliforce.events import EventBus, OutboxPublisher
+from intelliforce.events.subscriber import DebugSubscriber
 from intelliforce.settings import get_settings
 
 
@@ -32,14 +37,13 @@ def setup_logging() -> None:
     )
 
 
+# -----------------------------------------------------------------------------
+# Validações de conexão
+# -----------------------------------------------------------------------------
 async def validate_postgres() -> bool:
-    """Valida conexão Postgres + migrations aplicadas."""
     log = structlog.get_logger()
     try:
         from sqlalchemy import text
-
-        from intelliforce.db.base import async_session_factory
-
         async with async_session_factory() as session:
             result = await session.execute(text("SELECT count(*) FROM events"))
             count = result.scalar()
@@ -51,16 +55,12 @@ async def validate_postgres() -> bool:
 
 
 def validate_clickhouse() -> bool:
-    """Valida conexão ClickHouse + schema aplicado."""
     log = structlog.get_logger()
     try:
         from intelliforce.clickhouse.client import get_client
-
         client = get_client()
         try:
-            result = client.command(
-                "SELECT count(*) FROM intelliforce_audit.audit_events"
-            )
+            result = client.command("SELECT count(*) FROM intelliforce_audit.audit_events")
             log.info("clickhouse.connected", audit_events_count=result)
             return True
         finally:
@@ -71,13 +71,9 @@ def validate_clickhouse() -> bool:
 
 
 async def validate_redis() -> bool:
-    """Valida conexão Redis."""
     log = structlog.get_logger()
     try:
         import redis.asyncio as redis_async
-
-        from intelliforce.settings import get_settings
-
         client = redis_async.from_url(get_settings().redis_url)
         await client.ping()
         log.info("redis.connected")
@@ -88,18 +84,40 @@ async def validate_redis() -> bool:
         return False
 
 
+# -----------------------------------------------------------------------------
+# Emite evento de inicialização (testa o fluxo end-to-end do event bus)
+# -----------------------------------------------------------------------------
+async def emit_startup_event() -> None:
+    log = structlog.get_logger()
+    try:
+        async with async_session_factory() as session:
+            bus = EventBus(session)
+            await bus.emit(
+                type="system.worker_started",
+                aggregate_id="worker-main",
+                aggregate_type="system",
+                payload={"version": "0.1.0", "sprint": "3"},
+                metadata={"actor": "worker"},
+            )
+            await session.commit()
+        log.info("worker.startup_event_emitted")
+    except Exception:
+        log.exception("worker.startup_event_failed")
+
+
+# -----------------------------------------------------------------------------
+# Loop principal — rodando publisher + subscriber em paralelo
+# -----------------------------------------------------------------------------
 async def main() -> None:
-    """Loop principal do worker (Sprint 1: valida conexões e mantém vivo)."""
     settings = get_settings()
     log = structlog.get_logger()
 
     log.info(
         "worker.starting",
         version="0.1.0",
-        sprint="1",
+        sprint="3",
         environment=settings.app_env,
     )
-
     log.info(
         "worker.config",
         opencode_path=settings.opencode_config_path,
@@ -110,11 +128,10 @@ async def main() -> None:
         redis_host=settings.redis_host,
     )
 
-    # Valida conexões
+    # Valida conexões (não-bloqueante — segue mesmo se falhar; tarefa principal vai retentar)
     pg_ok = await validate_postgres()
     ch_ok = validate_clickhouse()
     rd_ok = await validate_redis()
-
     log.info(
         "worker.ready" if (pg_ok and ch_ok and rd_ok) else "worker.degraded",
         postgres=pg_ok,
@@ -122,13 +139,50 @@ async def main() -> None:
         redis=rd_ok,
     )
 
-    # Heartbeat loop (Sprint 3 substitui pelo consumer real do Redis Streams)
+    # Emite evento de startup pra validar fluxo
+    await emit_startup_event()
+
+    # Componentes que rodam em paralelo
+    publisher = OutboxPublisher(
+        batch_size=100,
+        poll_interval_seconds=settings.worker_poll_interval_seconds,
+    )
+    debug_subscriber = DebugSubscriber()
+
+    tasks: list[asyncio.Task] = []
+    tasks.append(asyncio.create_task(publisher.run_forever(), name="outbox-publisher"))
+    tasks.append(asyncio.create_task(debug_subscriber.run_forever(), name="debug-subscriber"))
+    tasks.append(asyncio.create_task(_heartbeat_loop(), name="heartbeat"))
+
+    # Shutdown gracioso em SIGTERM/SIGINT
+    loop = asyncio.get_running_loop()
+    stop_event = asyncio.Event()
+
+    def _signal_handler(sig: signal.Signals) -> None:
+        log.info("worker.signal_received", signal=sig.name)
+        stop_event.set()
+
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        with suppress(NotImplementedError):
+            loop.add_signal_handler(sig, _signal_handler, sig)
+
+    log.info("worker.tasks_started", count=len(tasks))
+    await stop_event.wait()
+
+    log.info("worker.shutdown_initiated")
+    await publisher.stop()
+    await debug_subscriber.stop()
+    for t in tasks:
+        t.cancel()
+    await asyncio.gather(*tasks, return_exceptions=True)
+    log.info("worker.shutdown_complete")
+
+
+async def _heartbeat_loop() -> None:
+    log = structlog.get_logger()
     while True:
         await asyncio.sleep(60)
-        log.info(
-            "worker.heartbeat",
-            message="Aguardando implementação Sprint 3 (consumer Redis Streams).",
-        )
+        log.info("worker.heartbeat")
 
 
 if __name__ == "__main__":

@@ -201,13 +201,13 @@ const BrandMark = () => (
 
 function AgentTile({ status = "active", size = 14, skill }: any) {
   const colors: any = {
-    active: "oklch(0.48 0.20 155)",        // verde forte — executando agora
-    idle: "oklch(0.86 0.06 165)",          // verde pastel — pronto, sem tarefa
+    active: "oklch(0.55 0.18 155)",        // verde forte — executando agora
+    idle: "oklch(0.80 0.10 155)",          // verde pastel — pronto, sem tarefa
     offline: "oklch(0.78 0.005 250)",      // cinza — desligado
     error: "var(--danger)",                // vermelho — quebrado
     pending: "oklch(0.78 0.005 250)",      // cinza
     awaiting_approval: "oklch(0.58 0.18 290)", // roxo magenta — precisa atenção humana
-    running: "oklch(0.48 0.20 155)",
+    running: "oklch(0.55 0.18 155)",
   };
   return (
     <div className="agent-tile" style={{ width: size, height: size, color: colors[status] }} title={`${skill || "agent"} · ${status}`}>
@@ -367,9 +367,7 @@ function DepartmentRow({ dept }: any) {
   const t = useTranslations("dashboard");
   const totalAgents = Object.values(dept.agents).reduce((a: any, b: any) => a + b, 0);
   const tiles = useMemo(() => buildAgentArray(dept.agents), [dept.id]);
-  const historyState = useState(null);
-  const history = historyState[0];
-  const setHistory = historyState[1];
+  const [history, setHistory] = useState(null as TaskHistoryItem[] | null);
 
   useEffect(() => {
     let cancelled = false;
@@ -509,6 +507,7 @@ function DepartmentRow({ dept }: any) {
             <span className="dt-total">{dept.metrics.executed.toLocaleString()} {t("done_suffix")}</span>
           </div>
           <HistorySection history={history} />
+        </div>
           <Timeline data={dept.metrics.timeline} health={dept.health} />
         </div>
       </div>
@@ -566,8 +565,8 @@ function HistorySection({ history }: { history: any }) {
 
 function StatusDot({ status }: { status: string }) {
   const color: Record<string, string> = {
-    completed: "oklch(0.48 0.20 155)",
-    running: "oklch(0.48 0.20 155)",
+    completed: "oklch(0.55 0.18 155)",
+    running: "oklch(0.55 0.18 155)",
     pending: "oklch(0.78 0.005 250)",
     awaiting_approval: "oklch(0.58 0.18 290)",
     failed: "var(--danger)",
@@ -622,9 +621,7 @@ function Timeline({ data, health }: any) {
  * Verde = completed, vermelho = failed, cinza = outros.
  */
 function AlphaDots({ activityId }: { activityId: string }) {
-  const itemsState = useState([]);
-  const items = itemsState[0];
-  const setItems = itemsState[1];
+  const [items, setItems] = useState([] as RecentExecution[]);
 
   useEffect(() => {
     if (!activityId) return;
@@ -641,9 +638,9 @@ function AlphaDots({ activityId }: { activityId: string }) {
   if (items.length === 0) return null;
 
   const colors: Record<string, string> = {
-    completed: "oklch(0.48 0.20 155)",
+    completed: "oklch(0.55 0.18 155)",
     failed: "var(--danger)",
-    running: "oklch(0.48 0.20 155)",
+    running: "oklch(0.55 0.18 155)",
     pending: "oklch(0.78 0.005 250)",
     cancelled: "var(--text-subtle)",
     awaiting_approval: "oklch(0.58 0.18 290)",
@@ -672,9 +669,7 @@ function AlphaDots({ activityId }: { activityId: string }) {
 
 export default function HomeV2Page() {
   const [collapsed, setCollapsed] = useState(false);
-  const orgState = useState(null);
-  const orgData = orgState[0];
-  const setOrgData = orgState[1];
+  const [orgData, setOrgData] = useState<any[] | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Tema vem do cookie, aplicado em layout.tsx — não forçar aqui

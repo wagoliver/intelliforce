@@ -1,16 +1,45 @@
 "use client";
 
+import { AnimatePresence, motion } from "framer-motion";
+import { useState } from "react";
+
 import type { OpenCodeFile, OpenCodeTree } from "../hooks/useOpenCodeTree";
+import {
+  ChevronIcon,
+  FileMarkdownIcon,
+  FolderClosedIcon,
+  FolderEmptyIcon,
+  FolderOpenIcon,
+  LockBadge,
+} from "./FileTreeIcons";
+
+/**
+ * Slugs imutáveis (system seeds). Frontend hardcoda enquanto a API não expõe
+ * o campo `protected`. TODO: trocar por flag vinda do GET /opencode/tree.
+ */
+const SEED_KEYS = new Set<string>([
+  "agent/builder",
+  "skill/karpathy-guidelines",
+]);
+
+type Selected = { kind: OpenCodeFile["kind"]; slug: string } | null;
 
 type Props = {
   tree: OpenCodeTree;
   loading: boolean;
   error: string | null;
-  selected: { kind: OpenCodeFile["kind"]; slug: string } | null;
+  selected: Selected;
   collapsed: boolean;
-  recentlyCreated: Set<string>; // chave: `${kind}/${slug}`
+  recentlyCreated: Set<string>;
   onSelect: (file: OpenCodeFile) => void;
   onToggleCollapsed: () => void;
+};
+
+const ANIM = {
+  initial: { height: 0, opacity: 0 },
+  animate: { height: "auto", opacity: 1 },
+  exit: { height: 0, opacity: 0 },
+  transition: { duration: 0.22, ease: [0.32, 0.72, 0, 1] as const },
 };
 
 export function FileTree({
@@ -23,7 +52,21 @@ export function FileTree({
   onSelect,
   onToggleCollapsed,
 }: Props) {
+  // Estado de expansão de cada folder. Default: 3 categorias raiz expandidas;
+  // skill-instances (cada slug de skill) colapsados (user clica pra abrir).
+  const [expanded, setExpanded] = useState<Set<string>>(
+    () => new Set(["root:agents", "root:skills", "root:commands"]),
+  );
+
   const total = tree.skills.length + tree.agents.length + tree.commands.length;
+
+  const toggle = (key: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
 
   if (collapsed) {
     return (
@@ -63,7 +106,7 @@ export function FileTree({
   return (
     <aside className="skills-tree skills-tree--expanded" aria-label="File tree do OpenCode">
       <header className="skills-tree-header">
-        <span className="skills-tree-eyebrow">opencode</span>
+        <span className="skills-tree-eyebrow">.opencode</span>
         <button
           type="button"
           className="skills-tree-toggle"
@@ -91,87 +134,258 @@ export function FileTree({
         </div>
       )}
 
-      <Section
-        title="skills"
-        files={tree.skills}
-        selected={selected}
-        recentlyCreated={recentlyCreated}
-        onSelect={onSelect}
-      />
-      <Section
-        title="agents"
-        files={tree.agents}
-        selected={selected}
-        recentlyCreated={recentlyCreated}
-        onSelect={onSelect}
-      />
-      <Section
-        title="commands"
-        files={tree.commands}
-        selected={selected}
-        recentlyCreated={recentlyCreated}
-        onSelect={onSelect}
-      />
+      <div className="skills-tree-body" role="tree">
+        {/* agents — files diretos */}
+        <CategoryFolder
+          label="agents"
+          count={tree.agents.length}
+          expanded={expanded.has("root:agents")}
+          onToggle={() => toggle("root:agents")}
+        >
+          {tree.agents.map((f) => (
+            <FileLeaf
+              key={`agent/${f.slug}`}
+              file={f}
+              filename={`${f.slug}.md`}
+              selected={selected}
+              recentlyCreated={recentlyCreated}
+              onSelect={onSelect}
+            />
+          ))}
+        </CategoryFolder>
+
+        {/* skills — cada slug é um folder com SKILL.md dentro */}
+        <CategoryFolder
+          label="skills"
+          count={tree.skills.length}
+          expanded={expanded.has("root:skills")}
+          onToggle={() => toggle("root:skills")}
+        >
+          {tree.skills.map((f) => {
+            const key = `skill/${f.slug}`;
+            const folderKey = `skill-folder:${f.slug}`;
+            const isFolderExpanded = expanded.has(folderKey);
+            const isSeed = SEED_KEYS.has(key);
+            return (
+              <SkillFolder
+                key={key}
+                file={f}
+                isSeed={isSeed}
+                expanded={isFolderExpanded}
+                onToggle={() => toggle(folderKey)}
+              >
+                <FileLeaf
+                  file={f}
+                  filename="SKILL.md"
+                  selected={selected}
+                  recentlyCreated={recentlyCreated}
+                  onSelect={onSelect}
+                />
+              </SkillFolder>
+            );
+          })}
+        </CategoryFolder>
+
+        {/* commands — files diretos (geralmente vazio no MVP) */}
+        <CategoryFolder
+          label="commands"
+          count={tree.commands.length}
+          expanded={expanded.has("root:commands")}
+          onToggle={() => toggle("root:commands")}
+          empty={tree.commands.length === 0}
+        >
+          {tree.commands.length === 0 ? (
+            <div className="skills-tree-empty-line">vazio</div>
+          ) : (
+            tree.commands.map((f) => (
+              <FileLeaf
+                key={`command/${f.slug}`}
+                file={f}
+                filename={`${f.slug}.md`}
+                selected={selected}
+                recentlyCreated={recentlyCreated}
+                onSelect={onSelect}
+              />
+            ))
+          )}
+        </CategoryFolder>
+      </div>
     </aside>
   );
 }
 
-function Section({
-  title,
-  files,
+/* -------------------------------------------------------------------------- */
+/* Category folder — agents / skills / commands (raiz)                        */
+/* -------------------------------------------------------------------------- */
+
+function CategoryFolder({
+  label,
+  count,
+  expanded,
+  empty = false,
+  onToggle,
+  children,
+}: {
+  label: string;
+  count: number;
+  expanded: boolean;
+  empty?: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  const Icon = empty ? FolderEmptyIcon : expanded ? FolderOpenIcon : FolderClosedIcon;
+  return (
+    <div className="skills-tree-node">
+      <button
+        type="button"
+        className="skills-tree-row skills-tree-row--folder"
+        onClick={onToggle}
+        aria-expanded={expanded}
+        onMouseMove={(e) => {
+          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+          e.currentTarget.style.setProperty("--mx", `${e.clientX - rect.left}px`);
+          e.currentTarget.style.setProperty("--my", `${e.clientY - rect.top}px`);
+        }}
+      >
+        <span className="skills-tree-chevron" style={{ color: "var(--text-subtle)" }}>
+          <ChevronIcon expanded={expanded} />
+        </span>
+        <span className="skills-tree-icon">
+          <Icon size={20} />
+        </span>
+        <span className="skills-tree-name">{label}</span>
+        <span className="skills-tree-count">{count}</span>
+      </button>
+      <AnimatePresence initial={false}>
+        {expanded && (
+          <motion.div
+            key="children"
+            className="skills-tree-children"
+            {...ANIM}
+            style={{ overflow: "hidden" }}
+          >
+            <div className="skills-tree-children-inner">{children}</div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Skill folder — cada slug de skill é uma pasta com SKILL.md dentro          */
+/* -------------------------------------------------------------------------- */
+
+function SkillFolder({
+  file,
+  isSeed,
+  expanded,
+  onToggle,
+  children,
+}: {
+  file: OpenCodeFile;
+  isSeed: boolean;
+  expanded: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  const Icon = expanded ? FolderOpenIcon : FolderClosedIcon;
+  return (
+    <div className="skills-tree-node">
+      <button
+        type="button"
+        className="skills-tree-row skills-tree-row--folder skills-tree-row--nested"
+        onClick={onToggle}
+        aria-expanded={expanded}
+        title={file.description ?? ""}
+        onMouseMove={(e) => {
+          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+          e.currentTarget.style.setProperty("--mx", `${e.clientX - rect.left}px`);
+          e.currentTarget.style.setProperty("--my", `${e.clientY - rect.top}px`);
+        }}
+      >
+        <span className="skills-tree-chevron" style={{ color: "var(--text-subtle)" }}>
+          <ChevronIcon expanded={expanded} />
+        </span>
+        <span className="skills-tree-icon">
+          <Icon size={18} />
+          {isSeed && (
+            <span className="skills-tree-lock-badge" aria-label="Imutável">
+              <LockBadge />
+            </span>
+          )}
+        </span>
+        <span className="skills-tree-name skills-tree-name--mono">{file.slug}</span>
+      </button>
+      <AnimatePresence initial={false}>
+        {expanded && (
+          <motion.div
+            key="children"
+            className="skills-tree-children"
+            {...ANIM}
+            style={{ overflow: "hidden" }}
+          >
+            <div className="skills-tree-children-inner">{children}</div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* File leaf — folha clicável (abre drawer)                                   */
+/* -------------------------------------------------------------------------- */
+
+function FileLeaf({
+  file,
+  filename,
   selected,
   recentlyCreated,
   onSelect,
 }: {
-  title: string;
-  files: OpenCodeFile[];
-  selected: { kind: OpenCodeFile["kind"]; slug: string } | null;
+  file: OpenCodeFile;
+  filename: string;
+  selected: Selected;
   recentlyCreated: Set<string>;
   onSelect: (file: OpenCodeFile) => void;
 }) {
+  const key = `${file.kind}/${file.slug}`;
+  const isSelected = selected?.kind === file.kind && selected?.slug === file.slug;
+  const justCreated = recentlyCreated.has(key);
+  const isSeed = SEED_KEYS.has(key);
+
   return (
-    <div className="skills-tree-section">
-      <div className="skills-tree-section-label">
-        <span>{title}</span>
-        <span className="skills-tree-section-count">·</span>
-        <span className="skills-tree-section-count">{files.length}</span>
-      </div>
-      {files.length === 0 ? (
-        <div className="skills-tree-empty">vazio</div>
-      ) : (
-        files.map((f) => {
-          const key = `${f.kind}/${f.slug}`;
-          const isSelected = selected?.kind === f.kind && selected?.slug === f.slug;
-          const justCreated = recentlyCreated.has(key);
-          return (
-            <button
-              key={key}
-              type="button"
-              title={f.description ?? ""}
-              className={[
-                "skills-tree-item",
-                isSelected && "skills-tree-item--selected",
-                justCreated && "skills-tree-item--just-created",
-              ]
-                .filter(Boolean)
-                .join(" ")}
-              onClick={() => onSelect(f)}
-              onMouseMove={(e) => {
-                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                e.currentTarget.style.setProperty("--mx", `${e.clientX - rect.left}px`);
-                e.currentTarget.style.setProperty("--my", `${e.clientY - rect.top}px`);
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.removeProperty("--mx");
-                e.currentTarget.style.removeProperty("--my");
-              }}
-            >
-              <span className="skills-tree-item-dot" aria-hidden="true" />
-              <span className="skills-tree-item-name">{f.slug}</span>
-            </button>
-          );
-        })
-      )}
-    </div>
+    <button
+      type="button"
+      title={file.description ?? ""}
+      className={[
+        "skills-tree-row",
+        "skills-tree-row--file",
+        "skills-tree-row--nested",
+        isSelected && "skills-tree-row--selected",
+        justCreated && "skills-tree-row--just-created",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      onClick={() => onSelect(file)}
+      onMouseMove={(e) => {
+        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        e.currentTarget.style.setProperty("--mx", `${e.clientX - rect.left}px`);
+        e.currentTarget.style.setProperty("--my", `${e.clientY - rect.top}px`);
+      }}
+    >
+      {/* spacer no lugar do chevron pra alinhar com folder rows */}
+      <span className="skills-tree-chevron skills-tree-chevron--spacer" aria-hidden="true" />
+      <span className="skills-tree-icon">
+        <FileMarkdownIcon size={16} glow={isSelected} />
+        {isSeed && (
+          <span className="skills-tree-lock-badge" aria-label="Imutável">
+            <LockBadge />
+          </span>
+        )}
+      </span>
+      <span className="skills-tree-name skills-tree-name--mono">{filename}</span>
+    </button>
   );
 }

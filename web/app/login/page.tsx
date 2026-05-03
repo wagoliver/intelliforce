@@ -441,7 +441,7 @@ function FootBar() {
 // ============================================================================
 function StageInstitutional() {
   return (
-    <div style={{
+    <div className="mesh-shift-bg" style={{
       position: "relative",
       width: "100%",
       height: "100%",
@@ -450,8 +450,9 @@ function StageInstitutional() {
       flexDirection: "column",
       justifyContent: "space-between",
       backgroundImage:
-        "radial-gradient(circle at 20% 10%, color-mix(in oklab, var(--accent) 10%, transparent), transparent 50%), " +
-        "radial-gradient(circle at 80% 90%, color-mix(in oklab, var(--accent) 8%, transparent), transparent 50%)",
+        "radial-gradient(circle at 20% 10%, color-mix(in oklab, var(--accent-green) 14%, transparent), transparent 50%), " +
+        "radial-gradient(circle at 80% 90%, color-mix(in oklab, var(--accent-cyan) 12%, transparent), transparent 50%)",
+      backgroundSize: "180% 180%, 180% 180%",
       overflow: "hidden",
     }}>
       <BgGrid />
@@ -535,15 +536,9 @@ function StageInstitutional() {
 
 function Hl({ children }: { children: React.ReactNode }) {
   return (
-    <span style={{
-      display: "inline-block",
-      padding: "0 12px",
-      background: "var(--accent-soft)",
-      color: "var(--accent)",
-      borderRadius: 999,
-      lineHeight: 1.18,
+    <span className="text-gradient-accent" style={{
       whiteSpace: "nowrap",
-      fontWeight: 600,
+      fontWeight: 700,
     }}>
       {children}
     </span>

@@ -11,11 +11,13 @@
   --text-muted: oklch(0.50 0.012 255);
   --text-subtle: oklch(0.65 0.010 255);
 
-  /* Accent — deep indigo, single-hue family */
-  --accent: oklch(0.42 0.13 265);
-  --accent-hover: oklch(0.36 0.13 265);
-  --accent-soft: oklch(0.96 0.02 265);
+  /* Accent — green (alinha com /skills); cyan como secundário pra gradients */
+  --accent: oklch(0.55 0.16 152);
+  --accent-hover: oklch(0.48 0.17 152);
+  --accent-soft: oklch(0.96 0.04 152);
   --accent-fg: #ffffff;
+  --accent-green: oklch(0.55 0.16 152);
+  --accent-cyan: oklch(0.62 0.13 215);
 
   --danger: oklch(0.55 0.18 25);
   --success: oklch(0.55 0.13 155);
@@ -355,8 +357,13 @@ input { font-family: inherit; }
   transition: background 120ms ease, transform 80ms ease, box-shadow 120ms ease;
   position: relative;
 }
-.btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
-.btn-primary:active { transform: translateY(1px); }
+.btn-primary:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+  box-shadow: 0 8px 24px color-mix(in oklab, var(--accent) 32%, transparent);
+  transform: translateY(-1px);
+}
+.btn-primary:active { transform: translateY(1px); box-shadow: none; }
 .btn-primary:disabled { opacity: 0.55; cursor: not-allowed; }
 
 .btn-ghost {
@@ -509,6 +516,57 @@ input { font-family: inherit; }
 @keyframes feedIn {
   from { opacity: 0; transform: translateY(-6px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+/* ==== Identidade visual estendida da /skills ==== */
+
+/* Gradient text reutilizável — verde→cyan animado */
+.text-gradient-accent {
+  background: linear-gradient(110deg,
+              var(--accent-green) 0%,
+              var(--accent-cyan) 50%,
+              var(--accent-green) 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: gradient-shift 8s ease-in-out infinite;
+  /* Garantia contra "salto" na altura da linha em browsers que renderizam fallback */
+  display: inline;
+}
+@keyframes gradient-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50%      { background-position: 100% 50%; }
+}
+
+/* Mesh background animado — leve, pra zonas hero (stage do login, hero do dashboard) */
+.mesh-shift-bg {
+  animation: mesh-shift-soft 22s ease-in-out infinite alternate;
+}
+@keyframes mesh-shift-soft {
+  0%   { background-position: 0% 0%, 100% 100%; }
+  50%  { background-position: 5% 6%, 95% 94%; }
+  100% { background-position: -3% -2%, 103% 96%; }
+}
+
+/* Glow direcional do cursor — aplicado em cards/chips clicáveis */
+.glow-on-hover { position: relative; overflow: hidden; }
+.glow-on-hover::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(140px circle at var(--mx, -100%) var(--my, 50%),
+              color-mix(in oklab, var(--accent) 22%, transparent), transparent 70%);
+  opacity: 0;
+  transition: opacity 220ms ease;
+  pointer-events: none;
+}
+.glow-on-hover:hover::before { opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .text-gradient-accent,
+  .mesh-shift-bg { animation: none !important; }
+  .btn-primary:hover { transform: none; }
 }
 
 @keyframes waveExpand {

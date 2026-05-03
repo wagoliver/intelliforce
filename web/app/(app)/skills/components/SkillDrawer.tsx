@@ -1,20 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { marked } from "marked";
+import { useEffect, useMemo, useState } from "react";
 
 import { fetchOpenCodeContent, type OpenCodeContent, type OpenCodeFile } from "../hooks/useOpenCodeTree";
+import { useReducedMotion } from "../hooks/useReducedMotion";
 
 type Props = {
   selected: { kind: OpenCodeFile["kind"]; slug: string } | null;
   onClose: () => void;
 };
 
+marked.setOptions({ breaks: false, gfm: true });
+
 export function SkillDrawer({ selected, onClose }: Props) {
   const [content, setContent] = useState<OpenCodeContent | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const reducedMotion = useReducedMotion();
 
-  // Fecha com Esc
   useEffect(() => {
     if (!selected) return;
     const onKey = (e: KeyboardEvent) => {
@@ -24,7 +29,6 @@ export function SkillDrawer({ selected, onClose }: Props) {
     return () => window.removeEventListener("keydown", onKey);
   }, [selected, onClose]);
 
-  // Busca conteúdo quando seleção muda
   useEffect(() => {
     if (!selected) {
       setContent(null);
@@ -50,155 +54,94 @@ export function SkillDrawer({ selected, onClose }: Props) {
     };
   }, [selected]);
 
-  if (!selected) return null;
+  const renderedBody = useMemo(() => {
+    if (!content?.body) return null;
+    return marked.parse(content.body) as string;
+  }, [content]);
+
+  const slideDuration = reducedMotion ? 0 : 0.3;
 
   return (
-    <>
-      <div
-        onClick={onClose}
-        style={{
-          position: "fixed",
-          inset: 0,
-          background: "rgba(0,0,0,0.18)",
-          zIndex: 40,
-        }}
-        aria-hidden="true"
-      />
-      <aside
-        role="dialog"
-        aria-modal="true"
-        aria-label={`${selected.kind} ${selected.slug}`}
-        style={{
-          position: "fixed",
-          right: 0,
-          top: 0,
-          bottom: 0,
-          width: "min(560px, 92vw)",
-          background: "var(--bg-elev)",
-          borderLeft: "1px solid var(--border)",
-          padding: "20px 22px",
-          display: "flex",
-          flexDirection: "column",
-          gap: 12,
-          zIndex: 50,
-          overflowY: "auto",
-          boxShadow: "-12px 0 24px rgba(0,0,0,0.08)",
-        }}
-      >
-        <header style={{ display: "flex", alignItems: "start", justifyContent: "space-between", gap: 12 }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <span
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: 10.5,
-                color: "var(--text-subtle)",
-                letterSpacing: "0.06em",
-                textTransform: "uppercase",
-              }}
-            >
-              {selected.kind}
-            </span>
-            <h2
-              style={{
-                fontFamily: "var(--font-display)",
-                fontSize: 18,
-                fontWeight: 500,
-                margin: 0,
-                color: "var(--text)",
-                letterSpacing: "-0.01em",
-              }}
-            >
-              {selected.slug}
-            </h2>
-          </div>
-          <button
+    <AnimatePresence>
+      {selected && (
+        <>
+          <motion.div
+            key="backdrop"
+            className="skills-drawer-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: slideDuration }}
             onClick={onClose}
-            aria-label="Fechar"
-            title="Fechar (Esc)"
-            style={{
-              width: 28,
-              height: 28,
-              border: "1px solid var(--border)",
-              borderRadius: 6,
-              background: "transparent",
-              color: "var(--text-muted)",
-              cursor: "pointer",
-              display: "grid",
-              placeItems: "center",
-              flexShrink: 0,
-            }}
+            aria-hidden="true"
+          />
+          <motion.aside
+            key="drawer"
+            className="skills-drawer"
+            role="dialog"
+            aria-modal="true"
+            aria-label={`${selected.kind} ${selected.slug}`}
+            initial={{ x: reducedMotion ? 0 : "100%", opacity: reducedMotion ? 0 : 1 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: reducedMotion ? 0 : "100%", opacity: reducedMotion ? 0 : 1 }}
+            transition={{ duration: slideDuration, ease: [0.32, 0.72, 0, 1] }}
           >
-            <svg width={12} height={12} viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
-              <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" fill="none" />
-            </svg>
-          </button>
-        </header>
-
-        {loading && <div style={{ fontSize: 12, color: "var(--text-subtle)" }}>carregando…</div>}
-        {error && (
-          <div role="alert" style={{ fontSize: 12.5, color: "var(--danger)" }}>
-            {error}
-          </div>
-        )}
-
-        {content && (
-          <>
-            {Object.keys(content.frontmatter).length > 0 && (
-              <section
-                style={{
-                  border: "1px solid var(--border)",
-                  borderRadius: 6,
-                  padding: "10px 12px",
-                  background: "var(--bg-sunken)",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 4,
-                }}
+            <header className="skills-drawer-header">
+              <div>
+                <span className="skills-drawer-eyebrow">{selected.kind}</span>
+                <h2 className="skills-drawer-title">{selected.slug}</h2>
+              </div>
+              <button
+                type="button"
+                className="skills-drawer-close"
+                onClick={onClose}
+                aria-label="Fechar"
+                title="Fechar (Esc)"
               >
-                <div
-                  style={{
-                    fontSize: 10.5,
-                    fontFamily: "var(--font-mono)",
-                    color: "var(--text-subtle)",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.04em",
-                    marginBottom: 4,
-                  }}
-                >
-                  frontmatter
-                </div>
-                {Object.entries(content.frontmatter).map(([k, v]) => (
-                  <div key={k} style={{ display: "flex", gap: 8, fontSize: 12, alignItems: "baseline" }}>
-                    <span style={{ fontFamily: "var(--font-mono)", color: "var(--text-subtle)", minWidth: 90 }}>{k}</span>
-                    <span style={{ color: "var(--text)", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                      {typeof v === "string" ? v : JSON.stringify(v)}
-                    </span>
-                  </div>
-                ))}
-              </section>
+                <svg width={12} height={12} viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+                  <path
+                    d="M4 4l8 8M12 4l-8 8"
+                    stroke="currentColor"
+                    strokeWidth="1.4"
+                    strokeLinecap="round"
+                    fill="none"
+                  />
+                </svg>
+              </button>
+            </header>
+
+            {loading && <div className="skills-drawer-loading">carregando…</div>}
+            {error && (
+              <div role="alert" className="skills-drawer-error">
+                {error}
+              </div>
             )}
-            <pre
-              style={{
-                margin: 0,
-                padding: "12px 14px",
-                border: "1px solid var(--border)",
-                borderRadius: 6,
-                background: "var(--bg)",
-                fontSize: 12,
-                lineHeight: 1.55,
-                color: "var(--text)",
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-word",
-                fontFamily: "var(--font-mono)",
-                overflow: "auto",
-                maxHeight: "62vh",
-              }}
-            >
-              {content.body || "(corpo vazio)"}
-            </pre>
-          </>
-        )}
-      </aside>
-    </>
+
+            {content && (
+              <>
+                {Object.keys(content.frontmatter).length > 0 && (
+                  <section className="skills-drawer-fm">
+                    <div className="skills-drawer-fm-label">frontmatter</div>
+                    {Object.entries(content.frontmatter).map(([k, v]) => (
+                      <div key={k} className="skills-drawer-fm-row">
+                        <span className="skills-drawer-fm-key">{k}</span>
+                        <span className="skills-drawer-fm-value">
+                          {typeof v === "string" ? v : JSON.stringify(v, null, 2)}
+                        </span>
+                      </div>
+                    ))}
+                  </section>
+                )}
+                {renderedBody ? (
+                  <div className="skills-markdown" dangerouslySetInnerHTML={{ __html: renderedBody }} />
+                ) : (
+                  <div className="skills-drawer-loading">(corpo vazio)</div>
+                )}
+              </>
+            )}
+          </motion.aside>
+        </>
+      )}
+    </AnimatePresence>
   );
 }

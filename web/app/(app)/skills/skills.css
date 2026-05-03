@@ -1,0 +1,727 @@
+/* =============================================================================
+ * Skills canvas — tema dark dedicado da rota /skills.
+ * Tokens escopados em .skills-canvas pra não vazar pra outras telas.
+ * ============================================================================= */
+
+.skills-canvas {
+  /* Override base tokens herdados de globals.css */
+  --bg: oklch(0.13 0.01 250);
+  --bg-elev: oklch(0.17 0.012 255);
+  --bg-sunken: oklch(0.10 0.01 250);
+  --bg-hover: oklch(0.22 0.014 255);
+  --bg-panel: oklch(0.17 0.012 255);
+
+  --border: oklch(0.25 0.01 255);
+  --border-strong: oklch(0.32 0.012 255);
+
+  --text: oklch(0.96 0.005 250);
+  --text-muted: oklch(0.65 0.015 255);
+  --text-subtle: oklch(0.45 0.012 255);
+
+  /* Cores de marca da tela */
+  --accent-green: oklch(0.78 0.18 152);
+  --accent-cyan: oklch(0.78 0.13 215);
+
+  /* Aliases pros tokens globais */
+  --accent: var(--accent-green);
+  --accent-soft: oklch(0.22 0.06 152);
+  --accent-fg: oklch(0.13 0.01 250);
+
+  --success: var(--accent-green);
+  --success-soft: oklch(0.22 0.06 152);
+  --warning: oklch(0.78 0.14 75);
+  --warning-soft: oklch(0.28 0.05 75);
+  --danger: oklch(0.68 0.18 25);
+  --danger-soft: oklch(0.30 0.06 25);
+
+  color-scheme: dark;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  position: relative;
+  overflow: hidden;
+}
+
+/* =============================================================================
+ * Mesh background — radial gradients animados em loop lento
+ * ============================================================================= */
+
+.skills-mesh {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(circle at 20% 12%, color-mix(in oklab, var(--accent-green) 14%, transparent), transparent 50%),
+    radial-gradient(circle at 82% 86%, color-mix(in oklab, var(--accent-cyan) 12%, transparent), transparent 55%),
+    radial-gradient(circle at 50% 50%, color-mix(in oklab, var(--accent-cyan) 4%, transparent), transparent 70%);
+  animation: mesh-shift 22s ease-in-out infinite alternate;
+}
+
+@keyframes mesh-shift {
+  0%   { background-position: 0% 0%, 100% 100%, 50% 50%; transform: scale(1); }
+  50%  { background-position: 5% 8%,  92% 92%,  48% 52%; transform: scale(1.03); }
+  100% { background-position: -3% -2%, 105% 88%, 52% 48%; transform: scale(1); }
+}
+
+/* Layer principal acima do mesh */
+.skills-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  height: 100vh;
+  width: 100%;
+}
+
+/* =============================================================================
+ * File tree (esquerda)
+ * ============================================================================= */
+
+.skills-tree {
+  background: color-mix(in oklab, var(--bg) 80%, transparent);
+  backdrop-filter: blur(12px);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  transition: width 240ms cubic-bezier(0.32, 0.72, 0, 1);
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+.skills-tree--expanded { width: 248px; padding: 16px 12px; gap: 18px; }
+.skills-tree--collapsed { width: 48px; padding: 12px 6px; align-items: center; gap: 8px; }
+
+.skills-tree-header {
+  display: flex; align-items: center; justify-content: space-between;
+}
+.skills-tree-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-subtle);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.skills-tree-toggle {
+  width: 24px; height: 24px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-subtle);
+  cursor: pointer;
+  display: grid; place-items: center;
+  transition: all 160ms ease;
+}
+.skills-tree-toggle:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+  border-color: var(--border);
+}
+.skills-tree-toggle svg { width: 12px; height: 12px; }
+
+.skills-tree-section {
+  display: flex; flex-direction: column;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+.skills-tree-section-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-subtle);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0 6px;
+  display: flex; align-items: center; gap: 6px;
+}
+.skills-tree-section-count {
+  color: var(--text-subtle);
+}
+.skills-tree-empty {
+  font-size: 11.5px;
+  color: var(--text-subtle);
+  font-style: italic;
+  padding: 2px 6px;
+}
+
+.skills-tree-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  width: 100%;
+  position: relative;
+  overflow: hidden;
+  transition: color 140ms ease, background 140ms ease, border-color 140ms ease;
+}
+.skills-tree-item::before {
+  /* glow direcional sutil no hover */
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(120px circle at var(--mx, -100%) var(--my, 50%),
+              color-mix(in oklab, var(--accent-green) 22%, transparent), transparent 70%);
+  opacity: 0;
+  transition: opacity 200ms ease;
+  pointer-events: none;
+}
+.skills-tree-item:hover::before { opacity: 1; }
+.skills-tree-item:hover {
+  color: var(--text);
+  background: color-mix(in oklab, var(--accent-green) 4%, transparent);
+}
+.skills-tree-item--selected {
+  color: var(--text);
+  background: color-mix(in oklab, var(--accent-green) 8%, transparent);
+  border-color: color-mix(in oklab, var(--accent-green) 24%, transparent);
+}
+.skills-tree-item-dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--text-subtle);
+  flex-shrink: 0;
+}
+.skills-tree-item--selected .skills-tree-item-dot { background: var(--accent-green); box-shadow: 0 0 8px var(--accent-green); }
+.skills-tree-item-name {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skills-tree-item--just-created {
+  animation: glow-in 1.6s ease-out;
+}
+@keyframes glow-in {
+  0%   { background: color-mix(in oklab, var(--accent-green) 35%, transparent); box-shadow: 0 0 0 0 color-mix(in oklab, var(--accent-green) 60%, transparent); }
+  60%  { background: color-mix(in oklab, var(--accent-green) 18%, transparent); box-shadow: 0 0 0 6px transparent; }
+  100% { background: transparent; box-shadow: none; }
+}
+
+/* =============================================================================
+ * Main center (chat)
+ * ============================================================================= */
+
+.skills-main {
+  flex: 1;
+  display: flex; flex-direction: column;
+  min-width: 0;
+  position: relative;
+  padding: 0;
+}
+
+/* =============================================================================
+ * Empty state
+ * ============================================================================= */
+
+.skills-empty {
+  flex: 1;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 28px;
+  padding: 40px 24px;
+  text-align: center;
+}
+.skills-empty-icon {
+  width: 64px; height: 64px;
+  border-radius: 16px;
+  background: color-mix(in oklab, var(--bg-elev) 70%, transparent);
+  border: 1px solid var(--border);
+  display: grid; place-items: center;
+  color: var(--accent-green);
+  position: relative;
+  animation: icon-pulse 3.6s ease-in-out infinite;
+}
+.skills-empty-icon::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 18px;
+  border: 1px solid color-mix(in oklab, var(--accent-green) 28%, transparent);
+  animation: icon-ring 3.6s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes icon-pulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 30px color-mix(in oklab, var(--accent-green) 12%, transparent); }
+  50%      { transform: scale(1.04); box-shadow: 0 0 50px color-mix(in oklab, var(--accent-green) 22%, transparent); }
+}
+@keyframes icon-ring {
+  0%, 100% { transform: scale(1); opacity: 0.6; }
+  50%      { transform: scale(1.18); opacity: 0; }
+}
+
+.skills-empty-headline {
+  font-family: var(--font-display);
+  font-size: 36px;
+  font-weight: 500;
+  letter-spacing: -0.025em;
+  margin: 0;
+  background: linear-gradient(110deg,
+              var(--accent-green) 0%,
+              var(--accent-cyan) 50%,
+              var(--accent-green) 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: gradient-shift 8s ease-in-out infinite;
+  max-width: 620px;
+  text-wrap: balance;
+}
+@keyframes gradient-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50%      { background-position: 100% 50%; }
+}
+.skills-empty-sub {
+  font-size: 13.5px;
+  color: var(--text-muted);
+  max-width: 460px;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.skills-suggestions {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  justify-content: center;
+  max-width: 620px;
+}
+.skills-suggestion {
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--bg-elev) 60%, transparent);
+  color: var(--text-muted);
+  font-size: 12.5px;
+  cursor: pointer;
+  font-family: inherit;
+  position: relative;
+  overflow: hidden;
+  transition: color 180ms ease, border-color 180ms ease, transform 180ms ease;
+}
+.skills-suggestion::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(120px circle at var(--mx, -100%) var(--my, 50%),
+              color-mix(in oklab, var(--accent-green) 30%, transparent), transparent 70%);
+  opacity: 0;
+  transition: opacity 220ms ease;
+}
+.skills-suggestion:hover {
+  color: var(--text);
+  border-color: color-mix(in oklab, var(--accent-green) 40%, transparent);
+  transform: translateY(-1px);
+}
+.skills-suggestion:hover::before { opacity: 1; }
+
+/* =============================================================================
+ * Chat scrollback + input
+ * ============================================================================= */
+
+.skills-chat {
+  flex: 1;
+  display: flex; flex-direction: column;
+  min-height: 0;
+  padding: 28px 32px 16px;
+  gap: 16px;
+  overflow-y: auto;
+}
+.skills-chat-empty-hint {
+  margin: auto 0;
+  text-align: center;
+  color: var(--text-subtle);
+  font-size: 13px;
+}
+
+.skills-bubble {
+  display: flex; flex-direction: column;
+  gap: 8px;
+  max-width: 78%;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  position: relative;
+}
+.skills-bubble--user {
+  align-self: flex-end;
+  background: color-mix(in oklab, var(--accent-cyan) 8%, var(--bg-elev));
+  border-color: color-mix(in oklab, var(--accent-cyan) 18%, var(--border));
+}
+.skills-bubble--agent {
+  align-self: flex-start;
+  background: color-mix(in oklab, var(--bg-elev) 80%, transparent);
+}
+.skills-bubble-role {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-subtle);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.skills-bubble-text {
+  white-space: pre-wrap;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+.skills-toolcalls { display: flex; flex-direction: column; gap: 4px; }
+.skills-toolcall {
+  display: flex; align-items: center; gap: 10px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  background: color-mix(in oklab, var(--bg) 50%, transparent);
+}
+.skills-toolcall-icon {
+  width: 14px; text-align: center;
+  display: inline-grid; place-items: center;
+}
+.skills-toolcall--running .skills-toolcall-icon {
+  color: var(--text-muted);
+}
+.skills-toolcall--running .skills-toolcall-icon::before {
+  content: "";
+  width: 10px; height: 10px;
+  border: 1.5px solid var(--text-subtle);
+  border-top-color: var(--accent-green);
+  border-radius: 50%;
+  animation: spin 700ms linear infinite;
+  display: block;
+}
+.skills-toolcall--done .skills-toolcall-icon {
+  color: var(--accent-green);
+  text-shadow: 0 0 8px color-mix(in oklab, var(--accent-green) 60%, transparent);
+}
+.skills-toolcall--error .skills-toolcall-icon { color: var(--danger); }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.skills-toolcall-tool { color: var(--text); font-weight: 500; }
+.skills-toolcall-desc {
+  color: var(--text-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.skills-thinking {
+  align-self: flex-start;
+  font-size: 12.5px;
+  color: var(--text-subtle);
+  font-style: italic;
+  position: relative;
+  overflow: hidden;
+  padding: 4px 0;
+}
+.skills-thinking::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg,
+              transparent 0%,
+              color-mix(in oklab, var(--accent-cyan) 18%, transparent) 50%,
+              transparent 100%);
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+@keyframes shimmer {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(100%); }
+}
+
+.skills-error {
+  margin: 0 32px;
+  color: var(--danger);
+  font-size: 13px;
+  padding: 10px 14px;
+  border: 1px solid color-mix(in oklab, var(--danger) 40%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in oklab, var(--danger) 10%, var(--bg-elev));
+}
+
+/* =============================================================================
+ * Composer (input + botão)
+ * ============================================================================= */
+
+.skills-composer {
+  margin: 0 32px 24px;
+  position: relative;
+  border-radius: 14px;
+  padding: 1px;  /* espessura da border gradient */
+  background: linear-gradient(110deg,
+              var(--accent-green),
+              var(--accent-cyan),
+              var(--accent-green));
+  background-size: 200% 100%;
+  animation: gradient-shift 8s ease-in-out infinite;
+}
+.skills-composer-inner {
+  display: flex; gap: 10px;
+  background: var(--bg-elev);
+  border-radius: 13px;
+  padding: 6px;
+}
+.skills-composer-input {
+  flex: 1;
+  padding: 10px 14px;
+  border: none;
+  border-radius: 9px;
+  font-size: 14.5px;
+  background: transparent;
+  color: var(--text);
+  outline: none;
+  font-family: inherit;
+}
+.skills-composer-input::placeholder { color: var(--text-subtle); }
+.skills-composer-button {
+  padding: 10px 22px;
+  border: none;
+  border-radius: 9px;
+  background: linear-gradient(135deg, var(--accent-green), var(--accent-cyan));
+  color: oklch(0.13 0.01 250);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: transform 140ms ease, box-shadow 200ms ease, opacity 200ms ease;
+}
+.skills-composer-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 22px color-mix(in oklab, var(--accent-green) 35%, transparent);
+}
+.skills-composer-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.skills-session {
+  margin: 0 32px 16px;
+  font-size: 11px;
+  color: var(--text-subtle);
+  font-family: var(--font-mono);
+}
+
+/* =============================================================================
+ * Drawer (slide-in da direita)
+ * ============================================================================= */
+
+.skills-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 40;
+  backdrop-filter: blur(2px);
+}
+.skills-drawer {
+  position: fixed;
+  right: 0; top: 0; bottom: 0;
+  width: min(620px, 92vw);
+  background: var(--bg-elev);
+  border-left: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  gap: 14px;
+  z-index: 50;
+  overflow-y: auto;
+  padding: 24px 26px;
+  box-shadow: -16px 0 40px rgba(0, 0, 0, 0.45);
+  color: var(--text);
+}
+.skills-drawer-header {
+  display: flex; align-items: start; justify-content: space-between;
+  gap: 12px;
+}
+.skills-drawer-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-subtle);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.skills-drawer-title {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+  margin: 4px 0 0;
+  color: var(--text);
+}
+.skills-drawer-close {
+  width: 30px; height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: grid; place-items: center;
+  transition: all 140ms ease;
+  flex-shrink: 0;
+}
+.skills-drawer-close:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.skills-drawer-fm {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: var(--bg-sunken);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.skills-drawer-fm-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-subtle);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.skills-drawer-fm-row {
+  display: flex; gap: 10px; font-size: 12.5px; align-items: baseline;
+}
+.skills-drawer-fm-key {
+  font-family: var(--font-mono);
+  color: var(--text-subtle);
+  min-width: 100px;
+}
+.skills-drawer-fm-value {
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Markdown render */
+.skills-markdown {
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--text);
+}
+.skills-markdown h1, .skills-markdown h2, .skills-markdown h3 {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+  font-weight: 500;
+  margin: 22px 0 8px;
+  color: var(--text);
+}
+.skills-markdown h1 { font-size: 22px; }
+.skills-markdown h2 { font-size: 18px; }
+.skills-markdown h3 { font-size: 15.5px; }
+.skills-markdown p { margin: 0 0 12px; color: var(--text-muted); }
+.skills-markdown a { color: var(--accent-cyan); text-decoration: none; border-bottom: 1px dashed color-mix(in oklab, var(--accent-cyan) 50%, transparent); }
+.skills-markdown a:hover { color: var(--text); border-bottom-color: var(--accent-cyan); }
+.skills-markdown ul, .skills-markdown ol { margin: 0 0 12px; padding-left: 22px; color: var(--text-muted); }
+.skills-markdown li { margin: 3px 0; }
+.skills-markdown code {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  background: color-mix(in oklab, var(--bg) 80%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  color: var(--accent-cyan);
+}
+.skills-markdown pre {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  font-size: 12.5px;
+  line-height: 1.55;
+  margin: 12px 0;
+}
+.skills-markdown pre code {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: var(--text);
+}
+.skills-markdown blockquote {
+  border-left: 2px solid var(--accent-green);
+  padding-left: 12px;
+  margin: 12px 0;
+  color: var(--text-muted);
+}
+.skills-markdown table {
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 13px;
+}
+.skills-markdown th, .skills-markdown td {
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  text-align: left;
+}
+.skills-markdown th { background: var(--bg-sunken); color: var(--text); }
+
+.skills-drawer-loading,
+.skills-drawer-error {
+  font-size: 13px;
+  color: var(--text-subtle);
+}
+.skills-drawer-error { color: var(--danger); }
+
+/* =============================================================================
+ * Header da tela
+ * ============================================================================= */
+
+.skills-header {
+  padding: 18px 32px 4px;
+  display: flex; flex-direction: column; gap: 4px;
+  position: relative;
+  z-index: 1;
+}
+.skills-header-title {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 500;
+  margin: 0;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  display: flex; align-items: center; gap: 10px;
+}
+.skills-header-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--accent-green);
+  box-shadow: 0 0 10px var(--accent-green);
+  animation: dot-pulse 2.4s ease-in-out infinite;
+}
+@keyframes dot-pulse {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50%      { opacity: 1; transform: scale(1.2); }
+}
+.skills-header-sub {
+  font-size: 11.5px;
+  color: var(--text-subtle);
+  font-family: var(--font-mono);
+}
+
+/* =============================================================================
+ * Reduced motion — desliga animações infinitas
+ * ============================================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  .skills-mesh,
+  .skills-empty-icon,
+  .skills-empty-icon::after,
+  .skills-empty-headline,
+  .skills-composer,
+  .skills-thinking::after,
+  .skills-tree-item--just-created,
+  .skills-header-dot {
+    animation: none !important;
+  }
+  .skills-suggestion:hover,
+  .skills-composer-button:hover:not(:disabled),
+  .skills-tree-item:hover {
+    transform: none !important;
+  }
+}

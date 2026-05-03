@@ -128,12 +128,15 @@ function TopBar() {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
+  const pathname = usePathname();
+  // /skills é uma "tela criativa" — usa o viewport inteiro, escapa do canvas centrado
+  const isFullscreen = !!pathname?.startsWith("/skills");
   return (
     <div className={`app ${collapsed ? "sidebar-collapsed" : ""}`}>
       <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} />
       <main>
         <TopBar />
-        <div className="canvas">{children}</div>
+        <div className={`canvas ${isFullscreen ? "canvas-full" : ""}`}>{children}</div>
       </main>
     </div>
   );

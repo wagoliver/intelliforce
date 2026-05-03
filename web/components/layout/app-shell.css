@@ -88,6 +88,7 @@ html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); f
 
 /* ===== Canvas ===== */
 .canvas { padding: 48px 56px 80px; max-width: 1480px; margin: 0 auto; }
+.canvas.canvas-full { padding: 0; max-width: none; margin: 0; }
 
 /* ===== Org header ===== */
 .org-header {

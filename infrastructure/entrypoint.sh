@@ -53,6 +53,39 @@ if [ -d "$SOURCE_DIR" ]; then
 
     export OPENCODE_CONFIG_PATH="$RUNTIME_DIR"
     echo "[entrypoint] OpenCode runtime pronto (skills persistem em $SOURCE_DIR/.opencode)."
+
+    # -------------------------------------------------------------------------
+    # System seeds — restauração obrigatória em todo startup
+    #
+    # Lista de arquivos imutáveis que ficam baked-in na imagem (Dockerfile)
+    # e são sempre reaplicados ao mount writable. Mesmo que o user (ou o
+    # builder agent) delete ou modifique, no próximo `up` voltam ao canônico.
+    #
+    # Pra atualizar um seed: editar o arquivo no repo e rodar --build.
+    # -------------------------------------------------------------------------
+    SEED_DIR=/opencode-seed
+    TARGET_OPENCODE="$SOURCE_DIR/.opencode"
+
+    if [ -d "$SEED_DIR" ] && [ -d "$TARGET_OPENCODE" ]; then
+        echo "[entrypoint] Aplicando system seeds (imutáveis)..."
+
+        # Agente builder
+        if [ -f "$SEED_DIR/agents/builder.md" ]; then
+            mkdir -p "$TARGET_OPENCODE/agents"
+            cp -f "$SEED_DIR/agents/builder.md" "$TARGET_OPENCODE/agents/builder.md"
+            echo "[entrypoint]   ✓ agents/builder.md"
+        fi
+
+        # Skill karpathy-guidelines
+        if [ -f "$SEED_DIR/skills/karpathy-guidelines/SKILL.md" ]; then
+            mkdir -p "$TARGET_OPENCODE/skills/karpathy-guidelines"
+            cp -f "$SEED_DIR/skills/karpathy-guidelines/SKILL.md" \
+                "$TARGET_OPENCODE/skills/karpathy-guidelines/SKILL.md"
+            echo "[entrypoint]   ✓ skills/karpathy-guidelines/SKILL.md"
+        fi
+    else
+        echo "[entrypoint] AVISO: seeds não aplicados (SEED_DIR=$SEED_DIR, TARGET=$TARGET_OPENCODE)"
+    fi
 else
     echo "[entrypoint] AVISO: $SOURCE_DIR não encontrado — pulando setup do OpenCode."
 fi

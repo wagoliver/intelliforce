@@ -56,6 +56,16 @@ ENV OPENCODE_CONFIG_PATH=/opencode-runtime \
     PYTHONUNBUFFERED=1
 
 # -----------------------------------------------------------------------------
+# System seeds — arquivos imutáveis que devem sempre existir e sempre estar
+# na versão canônica (git). Bakeados na imagem; o entrypoint copia pra dentro
+# do mount writable em todo startup, sobrescrevendo modificações.
+#
+# Pra "atualizar" um seed: edite o arquivo no repo e rebuild a imagem.
+# -----------------------------------------------------------------------------
+COPY opencode/.opencode/agents/builder.md /opencode-seed/agents/builder.md
+COPY opencode/.opencode/skills/karpathy-guidelines/SKILL.md /opencode-seed/skills/karpathy-guidelines/SKILL.md
+
+# -----------------------------------------------------------------------------
 # Healthcheck e entrypoint
 # -----------------------------------------------------------------------------
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \

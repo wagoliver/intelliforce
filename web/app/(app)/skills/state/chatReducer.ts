@@ -44,7 +44,14 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         isStreaming: true,
         messages: [
           ...state.messages,
-          { id: action.id, role: "agent", text: "", toolCalls: [], isStreaming: true },
+          {
+            id: action.id,
+            role: "agent",
+            text: "",
+            toolCalls: [],
+            thinkingLines: [],
+            isStreaming: true,
+          },
         ],
       };
     }
@@ -77,6 +84,18 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
           toolCalls: m.toolCalls.map((tc) =>
             tc.id === action.id ? { ...tc, status: action.status } : tc,
           ),
+        })),
+      };
+    }
+    case "THINKING_LINE": {
+      return {
+        ...state,
+        messages: updateLastAgentMessage(state.messages, (m) => ({
+          ...m,
+          thinkingLines: [
+            ...m.thinkingLines,
+            { id: action.id, kind: action.kind, label: action.label },
+          ],
         })),
       };
     }

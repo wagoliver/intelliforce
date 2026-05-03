@@ -7,6 +7,16 @@ export type ToolCall = {
   status: ToolCallStatus;
 };
 
+/**
+ * Linha "pensamento" — qualquer evento do CLI que não vira text nem tool.
+ * Ex: reasoning chunk, step_start, status updates.
+ */
+export type ThinkingLine = {
+  id: string;
+  kind: string;          // tipo do evento (ex: "reasoning", "step", "status")
+  label: string;         // texto curto pra exibição (já truncado)
+};
+
 export type ChatMessage =
   | {
       id: string;
@@ -18,6 +28,7 @@ export type ChatMessage =
       role: "agent";
       text: string;
       toolCalls: ToolCall[];
+      thinkingLines: ThinkingLine[];
       isStreaming: boolean;
       error?: string;
     };
@@ -35,6 +46,7 @@ export type ChatAction =
   | { type: "TEXT_DELTA"; text: string }
   | { type: "TOOL_CALL_STARTED"; id: string; tool: string; description: string }
   | { type: "TOOL_CALL_FINISHED"; id: string; status: "done" | "error" }
+  | { type: "THINKING_LINE"; id: string; kind: string; label: string }
   | { type: "SESSION_ID"; sessionId: string }
   | { type: "AGENT_TURN_FINISHED" }
   | { type: "ERROR"; error: string };

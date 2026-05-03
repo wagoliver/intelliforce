@@ -1,18 +1,16 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { marked } from "marked";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { fetchOpenCodeContent, type OpenCodeContent, type OpenCodeFile } from "../hooks/useOpenCodeTree";
 import { useReducedMotion } from "../hooks/useReducedMotion";
+import { MarkdownView } from "./MarkdownView";
 
 type Props = {
   selected: { kind: OpenCodeFile["kind"]; slug: string } | null;
   onClose: () => void;
 };
-
-marked.setOptions({ breaks: false, gfm: true });
 
 export function SkillDrawer({ selected, onClose }: Props) {
   const [content, setContent] = useState<OpenCodeContent | null>(null);
@@ -53,11 +51,6 @@ export function SkillDrawer({ selected, onClose }: Props) {
       cancelled = true;
     };
   }, [selected]);
-
-  const renderedBody = useMemo(() => {
-    if (!content?.body) return null;
-    return marked.parse(content.body) as string;
-  }, [content]);
 
   const slideDuration = reducedMotion ? 0 : 0.3;
 
@@ -132,8 +125,8 @@ export function SkillDrawer({ selected, onClose }: Props) {
                     ))}
                   </section>
                 )}
-                {renderedBody ? (
-                  <div className="skills-markdown" dangerouslySetInnerHTML={{ __html: renderedBody }} />
+                {content.body ? (
+                  <MarkdownView source={content.body} variant="drawer" />
                 ) : (
                   <div className="skills-drawer-loading">(corpo vazio)</div>
                 )}

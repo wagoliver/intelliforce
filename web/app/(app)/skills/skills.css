@@ -705,6 +705,118 @@
 }
 
 /* =============================================================================
+ * Process pane — agrupa tool calls + thinking lines no bubble do agente
+ * ============================================================================= */
+
+.skills-process { display: flex; flex-direction: column; gap: 4px; }
+
+.skills-thinking-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--text-subtle);
+}
+.skills-thinking-line-icon {
+  width: 14px;
+  text-align: center;
+  color: var(--text-subtle);
+  opacity: 0.7;
+}
+.skills-thinking-line-kind {
+  color: color-mix(in oklab, var(--accent-cyan) 60%, var(--text-subtle));
+  font-weight: 500;
+  flex-shrink: 0;
+}
+.skills-thinking-line-label {
+  color: var(--text-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+.skills-thinking-line--reasoning {
+  font-style: italic;
+}
+.skills-thinking-line--reasoning .skills-thinking-line-kind {
+  color: color-mix(in oklab, var(--accent-cyan) 75%, var(--text));
+}
+.skills-thinking-line--reasoning .skills-thinking-line-label {
+  color: color-mix(in oklab, var(--text) 70%, var(--text-subtle));
+}
+
+/* =============================================================================
+ * Markdown variant pra bubble do chat (margins tighter que no drawer)
+ * ============================================================================= */
+
+.skills-markdown--bubble {
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+.skills-markdown--bubble > *:first-child { margin-top: 0; }
+.skills-markdown--bubble > *:last-child { margin-bottom: 0; }
+.skills-markdown--bubble h1,
+.skills-markdown--bubble h2,
+.skills-markdown--bubble h3 {
+  margin: 14px 0 6px;
+}
+.skills-markdown--bubble h1 { font-size: 16.5px; }
+.skills-markdown--bubble h2 { font-size: 15px; }
+.skills-markdown--bubble h3 { font-size: 13.5px; }
+.skills-markdown--bubble p { margin: 0 0 8px; color: var(--text); }
+.skills-markdown--bubble ul,
+.skills-markdown--bubble ol { margin: 0 0 8px; padding-left: 20px; color: var(--text); }
+.skills-markdown--bubble li { margin: 2px 0; }
+.skills-markdown--bubble pre { margin: 8px 0; font-size: 12px; }
+.skills-markdown--bubble code { font-size: 12px; }
+.skills-markdown--bubble blockquote { margin: 8px 0; }
+
+/* =============================================================================
+ * Botão Parar (variante do composer-button)
+ * ============================================================================= */
+
+.skills-composer-button--stop {
+  background: color-mix(in oklab, var(--bg-elev) 70%, transparent);
+  color: var(--text-muted);
+  border: 1px solid var(--border-strong);
+  font-weight: 500;
+  position: relative;
+  padding-left: 32px;
+}
+.skills-composer-button--stop::before {
+  content: "";
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  background: var(--danger);
+  box-shadow: 0 0 8px color-mix(in oklab, var(--danger) 55%, transparent);
+}
+.skills-composer-button--stop:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--danger) 12%, var(--bg-elev));
+  border-color: color-mix(in oklab, var(--danger) 50%, var(--border-strong));
+  color: var(--text);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 22px color-mix(in oklab, var(--danger) 30%, transparent);
+}
+
+/* Bubble cancelado */
+.skills-bubble-cancelled {
+  font-size: 11.5px;
+  font-family: var(--font-mono);
+  color: var(--danger);
+  border-top: 1px dashed color-mix(in oklab, var(--danger) 40%, var(--border));
+  padding-top: 6px;
+  margin-top: 4px;
+}
+
+/* =============================================================================
  * Reduced motion — desliga animações infinitas
  * ============================================================================= */
 

@@ -5,11 +5,12 @@ import { useEffect, useRef, useState } from "react";
 
 import { EmptyState } from "./components/EmptyState";
 import { FileTree } from "./components/FileTree";
+import { MarkdownView } from "./components/MarkdownView";
 import { SkillDrawer } from "./components/SkillDrawer";
 import { useChatStream } from "./hooks/useChatStream";
 import { useOpenCodeTree, type OpenCodeFile, type OpenCodeTree } from "./hooks/useOpenCodeTree";
 import { useReducedMotion } from "./hooks/useReducedMotion";
-import type { ChatMessage, ToolCall } from "./state/types";
+import type { ChatMessage, ThinkingLine, ToolCall } from "./state/types";
 
 const SLIDE_UP = {
   hidden: { opacity: 0, y: 8 },
@@ -17,7 +18,7 @@ const SLIDE_UP = {
 };
 
 export default function SkillsPage() {
-  const { state, send } = useChatStream();
+  const { state, send, abort } = useChatStream();
   const { tree, loading: treeLoading, error: treeError, refetch } = useOpenCodeTree();
   const [input, setInput] = useState("");
   const [selected, setSelected] = useState<{ kind: OpenCodeFile["kind"]; slug: string } | null>(null);
@@ -145,19 +146,32 @@ export default function SkillsPage() {
                     onSubmit();
                   }
                 }}
-                placeholder="O que você quer construir?"
+                placeholder={
+                  state.isStreaming ? "OpenCode trabalhando…" : "O que você quer construir?"
+                }
                 disabled={state.isStreaming}
                 className="skills-composer-input"
                 aria-label="Mensagem para o OpenCode"
               />
-              <button
-                type="button"
-                onClick={() => onSubmit()}
-                disabled={state.isStreaming || !input.trim()}
-                className="skills-composer-button"
-              >
-                Enviar
-              </button>
+              {state.isStreaming ? (
+                <button
+                  type="button"
+                  onClick={abort}
+                  className="skills-composer-button skills-composer-button--stop"
+                  aria-label="Parar requisição em andamento"
+                >
+                  Parar
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => onSubmit()}
+                  disabled={!input.trim()}
+                  className="skills-composer-button"
+                >
+                  Enviar
+                </button>
+              )}
             </div>
           </div>
 
@@ -183,18 +197,35 @@ function MessageBubble({ message, reducedMotion }: { message: ChatMessage; reduc
       transition={{ duration: reducedMotion ? 0 : 0.28, ease: [0.34, 1.56, 0.64, 1] }}
     >
       <span className="skills-bubble-role">{isUser ? "você" : "opencode"}</span>
-      {!isUser && message.toolCalls.length > 0 && (
-        <div className="skills-toolcalls">
+
+      {!isUser && (message.toolCalls.length > 0 || message.thinkingLines.length > 0) && (
+        <div className="skills-process">
           <AnimatePresence initial={false}>
             {message.toolCalls.map((tc, i) => (
-              <ToolCallLine key={tc.id} call={tc} index={i} reducedMotion={reducedMotion} />
+              <ToolCallLine key={`tool-${tc.id}`} call={tc} index={i} reducedMotion={reducedMotion} />
+            ))}
+            {message.thinkingLines.map((tl, i) => (
+              <ThinkingLineRow
+                key={`think-${tl.id}`}
+                line={tl}
+                index={i + message.toolCalls.length}
+                reducedMotion={reducedMotion}
+              />
             ))}
           </AnimatePresence>
         </div>
       )}
-      {message.text && <div className="skills-bubble-text">{message.text}</div>}
+
+      {message.text && (
+        isUser ? (
+          <div className="skills-bubble-text">{message.text}</div>
+        ) : (
+          <MarkdownView source={message.text} variant="bubble" />
+        )
+      )}
+
       {!isUser && message.error && (
-        <div style={{ fontSize: 11.5, color: "var(--danger)" }}>{message.error}</div>
+        <div className="skills-bubble-cancelled">{message.error}</div>
       )}
     </motion.div>
   );
@@ -225,6 +256,35 @@ function ToolCallLine({
       </span>
       <span className="skills-toolcall-tool">{call.tool}</span>
       {call.description && <span className="skills-toolcall-desc">{call.description}</span>}
+    </motion.div>
+  );
+}
+
+function ThinkingLineRow({
+  line,
+  index,
+  reducedMotion,
+}: {
+  line: ThinkingLine;
+  index: number;
+  reducedMotion: boolean;
+}) {
+  const isReasoning = /reasoning|thought|thinking/i.test(line.kind);
+  const cls = isReasoning ? "skills-thinking-line skills-thinking-line--reasoning" : "skills-thinking-line";
+  return (
+    <motion.div
+      className={cls}
+      initial={reducedMotion ? { opacity: 1, x: 0 } : { opacity: 0, x: -6 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{
+        duration: reducedMotion ? 0 : 0.18,
+        delay: reducedMotion ? 0 : Math.min(index * 0.03, 0.3),
+        ease: [0.32, 0.72, 0, 1],
+      }}
+    >
+      <span className="skills-thinking-line-icon" aria-hidden="true">·</span>
+      <span className="skills-thinking-line-kind">{line.kind}</span>
+      {line.label && <span className="skills-thinking-line-label">{line.label}</span>}
     </motion.div>
   );
 }

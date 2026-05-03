@@ -274,9 +274,19 @@ class OpenCodeRunner:
                 "error": f"Erro inesperado: {e}",
                 "duration_ms": duration_ms,
             }
+        finally:
+            # Garantia: mata o subprocess se ainda estiver vivo. Cobre todos os
+            # caminhos de saída antecipada — incluindo CancelledError (Py 3.11+
+            # não herda de Exception, então passa direto pelos except). Quando
+            # o cliente HTTP fecha conexão SSE, FastAPI cancela o producer task
+            # no chat.py, que fecha esse async gen via aclose(), disparando
+            # este finally e evitando subprocess zumbi.
             if proc is not None and proc.returncode is None:
-                proc.kill()
-                await proc.wait()
+                try:
+                    proc.kill()
+                    await proc.wait()
+                except Exception:  # noqa: BLE001
+                    pass
 
     def _build_command(
         self,

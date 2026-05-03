@@ -140,6 +140,23 @@ export function useChatStream() {
   return { state, send, abort };
 }
 
+/**
+ * Eventos puramente estruturais do CLI — não trazem informação útil pro user
+ * e seriam só ruído se virassem thinking lines.
+ */
+const IGNORE_TYPES = new Set([
+  "step_start",
+  "step_finish",
+  "assistant_message_start",
+  "assistant_message_end",
+  "session_start",
+  "session_finish",
+  "session_init",
+  "session_end",
+  "message_start",
+  "message_end",
+]);
+
 function mapEventToAction(event: any): ChatAction | null {
   const type: string = event?.type ?? "";
 
@@ -154,7 +171,7 @@ function mapEventToAction(event: any): ChatAction | null {
     return { type: "ERROR", error: event?.error ?? "Erro desconhecido no stream" };
   }
 
-  // Eventos do CLI OpenCode
+  // Texto da resposta do agente
   if (type === "text") {
     const text = event?.part?.text ?? "";
     if (!text) return null;
@@ -177,14 +194,84 @@ function mapEventToAction(event: any): ChatAction | null {
     return { type: "TOOL_CALL_FINISHED", id, status: isError ? "error" : "done" };
   }
 
-  return null;
+  // Boundary events sem payload útil — descarta
+  if (IGNORE_TYPES.has(type)) return null;
+
+  // Qualquer outro evento vira "thinking line" — dá visibilidade do que o
+  // agente está fazendo entre tool calls.
+  const label = describeUnknownEvent(event);
+  if (!label && !type) return null;
+  return {
+    type: "THINKING_LINE",
+    id: genId(),
+    kind: type || "event",
+    label,
+  };
 }
 
-function describeToolInput(part: any): string {
-  const input = part?.input ?? part?.params ?? {};
-  if (typeof input === "string") return input.slice(0, 120);
-  if (input?.command) return String(input.command).slice(0, 120);
-  if (input?.path) return String(input.path).slice(0, 120);
-  if (input?.file_path) return String(input.file_path).slice(0, 120);
+/**
+ * Extrai uma descrição curta de um evento NDJSON do CLI pra exibir como
+ * "thinking line". Procura nos lugares mais prováveis de ter texto humano.
+ */
+function describeUnknownEvent(event: any): string {
+  const part = event?.part ?? event ?? {};
+  const candidates = [
+    part?.reasoning,
+    part?.thought,
+    part?.thinking,
+    part?.message,
+    part?.text,
+    part?.content,
+    part?.status,
+    part?.label,
+    typeof event?.error === "string" ? event.error : null,
+  ];
+  for (const c of candidates) {
+    if (typeof c === "string" && c.trim()) {
+      return c.trim().slice(0, 200);
+    }
+  }
   return "";
+}
+
+/**
+ * Descreve a invocação de um tool de forma legível, sem dump JSON gigante.
+ * Mantém prioridade dos campos mais úteis pra cada tool conhecido.
+ */
+function describeToolInput(part: any): string {
+  const tool = String(part?.tool ?? part?.name ?? "").toLowerCase();
+  const input = part?.input ?? part?.params ?? {};
+  if (typeof input === "string") return input.slice(0, 200);
+  if (typeof input !== "object" || input === null) return "";
+
+  // Bash: mostra o comando em si, truncado
+  if (tool === "bash" && input.command) {
+    return String(input.command).slice(0, 200);
+  }
+
+  // Write: path + tamanho do conteúdo (opcional)
+  if (tool === "write" && (input.file_path || input.path)) {
+    const path = String(input.file_path ?? input.path);
+    const content = input.content ?? input.text ?? "";
+    const len = typeof content === "string" ? content.length : 0;
+    return len > 0 ? `${path}  ·  ${len} chars` : path;
+  }
+
+  // Read: path + range opcional
+  if (tool === "read" && (input.file_path || input.path)) {
+    const path = String(input.file_path ?? input.path);
+    if (input.offset != null || input.limit != null) {
+      return `${path}  (offset ${input.offset ?? 0}, limit ${input.limit ?? "—"})`;
+    }
+    return path;
+  }
+
+  // Edit: path
+  if (tool === "edit" && (input.file_path || input.path)) {
+    return String(input.file_path ?? input.path);
+  }
+
+  // Fallback genérico — pega primeiro campo string conhecido
+  const fallback = input.command ?? input.path ?? input.file_path ?? input.url ?? "";
+  return String(fallback).slice(0, 200);
 }

@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -153,6 +154,129 @@ class OpenCodeRunner:
                 duration_ms=duration_ms,
                 command=cmd,
             )
+
+    async def run_stream(
+        self,
+        prompt: str,
+        agent: str | None = None,
+        model: str | None = None,
+        session_id: str | None = None,
+        continue_session: bool = False,
+        timeout_seconds: int | None = None,
+        extra_args: list[str] | None = None,
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Executa OpenCode e yielda cada linha NDJSON do stdout em tempo real.
+
+        Diferente de run(), não acumula nem retorna OpenCodeResult — quem consume
+        é responsável por agregar o que precisar. Eventos sintéticos extras emitidos:
+
+          - {"type": "stream_start", "command": [...]}                      (antes do primeiro evento)
+          - {"type": "stream_end", "exit_code": int, "duration_ms": int,    (depois do último)
+             "stderr": str}
+          - {"type": "stream_error", "error": str}                          (em caso de exceção)
+
+        Esses eventos sintéticos têm o prefixo "stream_" pra não colidir com os tipos do CLI.
+        """
+        cmd = self._build_command(
+            prompt=prompt,
+            agent=agent,
+            model=model,
+            session_id=session_id,
+            continue_session=continue_session,
+            extra_args=extra_args,
+        )
+        timeout = timeout_seconds or self.default_timeout_seconds
+
+        log.info("opencode.cli_stream_start", command=cmd, cwd=self.config_path, timeout=timeout)
+        start = time.monotonic()
+
+        proc: asyncio.subprocess.Process | None = None
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                cwd=self.config_path,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+
+            yield {"type": "stream_start", "command": cmd}
+
+            assert proc.stdout is not None  # subprocess garante PIPE → não-nulo
+            timed_out = False
+
+            async def read_lines() -> AsyncIterator[dict[str, Any]]:
+                assert proc is not None and proc.stdout is not None
+                async for raw in proc.stdout:
+                    line = raw.decode("utf-8", errors="replace").strip()
+                    if not line:
+                        continue
+                    try:
+                        event = json.loads(line)
+                    except json.JSONDecodeError:
+                        log.warning("opencode.cli_stream_bad_json", line=line[:200])
+                        continue
+                    yield event
+
+            try:
+                async with asyncio.timeout(timeout):
+                    async for event in read_lines():
+                        yield event
+            except TimeoutError:
+                timed_out = True
+                log.error("opencode.cli_stream_timeout", timeout=timeout)
+                if proc.returncode is None:
+                    proc.kill()
+
+            await proc.wait()
+            duration_ms = int((time.monotonic() - start) * 1000)
+
+            stderr_bytes = b""
+            if proc.stderr is not None:
+                try:
+                    stderr_bytes = await proc.stderr.read()
+                except Exception:
+                    pass
+            stderr_text = stderr_bytes.decode("utf-8", errors="replace")
+
+            exit_code = proc.returncode if proc.returncode is not None else -1
+            if timed_out:
+                yield {
+                    "type": "stream_error",
+                    "error": f"Timeout após {timeout}s",
+                    "duration_ms": duration_ms,
+                }
+            yield {
+                "type": "stream_end",
+                "exit_code": exit_code,
+                "duration_ms": duration_ms,
+                "stderr": stderr_text,
+            }
+            log.info(
+                "opencode.cli_stream_completed",
+                exit_code=exit_code,
+                duration_ms=duration_ms,
+                timed_out=timed_out,
+            )
+
+        except FileNotFoundError as e:
+            duration_ms = int((time.monotonic() - start) * 1000)
+            log.error("opencode.cli_not_found", error=str(e))
+            yield {
+                "type": "stream_error",
+                "error": f"Binário não encontrado: {self.binary}",
+                "duration_ms": duration_ms,
+            }
+        except Exception as e:
+            duration_ms = int((time.monotonic() - start) * 1000)
+            log.exception("opencode.cli_stream_unexpected_error")
+            yield {
+                "type": "stream_error",
+                "error": f"Erro inesperado: {e}",
+                "duration_ms": duration_ms,
+            }
+            if proc is not None and proc.returncode is None:
+                proc.kill()
+                await proc.wait()
 
     def _build_command(
         self,

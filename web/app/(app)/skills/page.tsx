@@ -1,65 +1,48 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-type Msg = { id: string; role: "user" | "agent"; text: string };
+import { useChatStream } from "./hooks/useChatStream";
+import type { ChatMessage, ToolCall } from "./state/types";
 
 export default function SkillsPage() {
-  const [messages, setMessages] = useState<Msg[]>([]);
+  const { state, send } = useChatStream();
   const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
 
-  async function send() {
-    const text = input.trim();
-    if (!text || loading) return;
+  // Auto-scroll quando entra mensagem nova ou texto streaming
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [state.messages]);
 
-    const userMsg: Msg = { id: crypto.randomUUID(), role: "user", text };
-    setMessages((prev) => [...prev, userMsg]);
+  function onSubmit() {
+    if (!input.trim() || state.isStreaming) return;
+    void send(input);
     setInput("");
-    setLoading(true);
-    setError(null);
-
-    try {
-      const res = await fetch("/api/proxy/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: text, session_id: sessionId }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(typeof data.detail === "string" ? data.detail : `HTTP ${res.status}`);
-        return;
-      }
-      if (!data.success) {
-        setError(data.error_message || "Erro desconhecido");
-        return;
-      }
-      if (data.session_id) setSessionId(data.session_id);
-      setMessages((prev) => [
-        ...prev,
-        { id: crypto.randomUUID(), role: "agent", text: data.text || "(resposta vazia)" },
-      ]);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
-    }
   }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 900, margin: "0 auto" }}>
       <header>
-        <h1 style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 500, margin: 0, letterSpacing: "-0.015em" }}>
+        <h1
+          style={{
+            fontFamily: "var(--font-display)",
+            fontSize: 22,
+            fontWeight: 500,
+            margin: 0,
+            letterSpacing: "-0.015em",
+          }}
+        >
           Skill · chat com OpenCode
         </h1>
         <p style={{ fontSize: 12, color: "var(--text-subtle)", marginTop: 4 }}>
-          Fase 1 (síncrono, sem streaming, sem visual). Feio mas funcional.
+          Fase 2 (streaming SSE, sem visual cinematográfico ainda).
         </p>
       </header>
 
       <div
+        ref={scrollRef}
         style={{
           border: "1px solid var(--border)",
           borderRadius: 8,
@@ -73,49 +56,24 @@ export default function SkillsPage() {
           background: "var(--bg-elev)",
         }}
       >
-        {messages.length === 0 && !loading && (
+        {state.messages.length === 0 && !state.isStreaming && (
           <div style={{ color: "var(--text-subtle)", fontSize: 13 }}>
             Sem mensagens. Manda um &quot;olá&quot; pra testar a conexão com OpenCode.
           </div>
         )}
-        {messages.map((m) => (
-          <div
-            key={m.id}
-            style={{
-              border: "1px solid var(--border)",
-              borderRadius: 6,
-              padding: "10px 12px",
-              background: m.role === "user" ? "var(--bg-sunken)" : "var(--bg)",
-              alignSelf: m.role === "user" ? "flex-end" : "flex-start",
-              maxWidth: "82%",
-            }}
-          >
-            <div
-              style={{
-                fontSize: 10.5,
-                fontFamily: "var(--font-mono)",
-                color: "var(--text-subtle)",
-                textTransform: "uppercase",
-                letterSpacing: "0.04em",
-                marginBottom: 6,
-              }}
-            >
-              {m.role === "user" ? "você" : "opencode"}
-            </div>
-            <div style={{ whiteSpace: "pre-wrap", fontSize: 13.5, lineHeight: 1.55, color: "var(--text)" }}>
-              {m.text}
-            </div>
-          </div>
+        {state.messages.map((m) => (
+          <MessageBubble key={m.id} message={m} />
         ))}
-        {loading && (
+        {state.isStreaming && (
           <div style={{ color: "var(--text-subtle)", fontSize: 12, fontStyle: "italic" }}>
-            OpenCode pensando…
+            OpenCode está pensando…
           </div>
         )}
       </div>
 
-      {error && (
+      {state.error && (
         <div
+          role="alert"
           style={{
             color: "var(--danger)",
             fontSize: 12.5,
@@ -125,7 +83,7 @@ export default function SkillsPage() {
             background: "var(--danger-soft)",
           }}
         >
-          {error}
+          {state.error}
         </div>
       )}
 
@@ -136,11 +94,11 @@ export default function SkillsPage() {
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
-              void send();
+              onSubmit();
             }
           }}
           placeholder="O que você quer construir?"
-          disabled={loading}
+          disabled={state.isStreaming}
           style={{
             flex: 1,
             padding: "10px 14px",
@@ -154,8 +112,8 @@ export default function SkillsPage() {
           }}
         />
         <button
-          onClick={() => void send()}
-          disabled={loading || !input.trim()}
+          onClick={onSubmit}
+          disabled={state.isStreaming || !input.trim()}
           style={{
             padding: "10px 22px",
             border: "1px solid var(--text)",
@@ -164,8 +122,8 @@ export default function SkillsPage() {
             color: "var(--bg)",
             fontSize: 14,
             fontWeight: 500,
-            cursor: loading || !input.trim() ? "not-allowed" : "pointer",
-            opacity: loading || !input.trim() ? 0.55 : 1,
+            cursor: state.isStreaming || !input.trim() ? "not-allowed" : "pointer",
+            opacity: state.isStreaming || !input.trim() ? 0.55 : 1,
             fontFamily: "inherit",
           }}
         >
@@ -173,10 +131,93 @@ export default function SkillsPage() {
         </button>
       </div>
 
-      {sessionId && (
+      {state.sessionId && (
         <div style={{ fontSize: 11, color: "var(--text-subtle)", fontFamily: "var(--font-mono)" }}>
-          session: {sessionId}
+          session: {state.sessionId}
         </div>
+      )}
+    </div>
+  );
+}
+
+function MessageBubble({ message }: { message: ChatMessage }) {
+  const isUser = message.role === "user";
+  return (
+    <div
+      style={{
+        border: "1px solid var(--border)",
+        borderRadius: 6,
+        padding: "10px 12px",
+        background: isUser ? "var(--bg-sunken)" : "var(--bg)",
+        alignSelf: isUser ? "flex-end" : "flex-start",
+        maxWidth: "82%",
+        display: "flex",
+        flexDirection: "column",
+        gap: 6,
+      }}
+    >
+      <div
+        style={{
+          fontSize: 10.5,
+          fontFamily: "var(--font-mono)",
+          color: "var(--text-subtle)",
+          textTransform: "uppercase",
+          letterSpacing: "0.04em",
+        }}
+      >
+        {isUser ? "você" : "opencode"}
+      </div>
+      {!isUser && message.toolCalls.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          {message.toolCalls.map((tc) => (
+            <ToolCallLine key={tc.id} call={tc} />
+          ))}
+        </div>
+      )}
+      {message.text && (
+        <div
+          style={{
+            whiteSpace: "pre-wrap",
+            fontSize: 13.5,
+            lineHeight: 1.55,
+            color: "var(--text)",
+          }}
+        >
+          {message.text}
+        </div>
+      )}
+      {!isUser && message.error && (
+        <div style={{ fontSize: 11.5, color: "var(--danger)" }}>{message.error}</div>
+      )}
+    </div>
+  );
+}
+
+function ToolCallLine({ call }: { call: ToolCall }) {
+  const icon = call.status === "running" ? "▸" : call.status === "done" ? "✓" : "✕";
+  const color =
+    call.status === "running"
+      ? "var(--text-muted)"
+      : call.status === "done"
+        ? "var(--success)"
+        : "var(--danger)";
+  return (
+    <div
+      style={{
+        fontFamily: "var(--font-mono)",
+        fontSize: 11.5,
+        color,
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+      }}
+    >
+      <span style={{ width: 12, textAlign: "center" }}>{icon}</span>
+      <span style={{ fontWeight: 500 }}>{call.tool}</span>
+      {call.description && (
+        <span style={{ color: "var(--text-subtle)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {call.description}
+        </span>
       )}
     </div>
   );

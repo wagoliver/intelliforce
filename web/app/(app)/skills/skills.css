@@ -34,10 +34,16 @@
   --danger: oklch(0.68 0.18 25);
   --danger-soft: oklch(0.30 0.06 25);
 
+  /* Topbar do AppShell ocupa esse espaço acima do canvas — desconta pra
+     a tela caber inteira no viewport sem forçar scroll pro composer. */
+  --topbar-h: 72px;
+
   color-scheme: dark;
   background: var(--bg);
   color: var(--text);
-  min-height: 100vh;
+  height: calc(100vh - var(--topbar-h));
+  height: calc(100dvh - var(--topbar-h));
+  min-height: 480px;
   position: relative;
   overflow: hidden;
 }
@@ -69,7 +75,7 @@
   position: relative;
   z-index: 1;
   display: flex;
-  height: 100vh;
+  height: 100%;
   width: 100%;
 }
 

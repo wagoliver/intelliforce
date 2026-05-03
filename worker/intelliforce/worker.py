@@ -18,7 +18,7 @@ from intelliforce.audit import AuditProjector
 from intelliforce.db.base import async_session_factory
 from intelliforce.events import EventBus, OutboxPublisher
 from intelliforce.events.subscriber import DebugSubscriber
-from intelliforce.scheduler import CronScheduler
+from intelliforce.scheduler import CronScheduler, TaskReaper
 from intelliforce.settings import get_settings
 from intelliforce.workers import TaskExecutor
 
@@ -146,6 +146,7 @@ async def main() -> None:
     task_executor = TaskExecutor()
     audit_projector = AuditProjector()
     scheduler = CronScheduler(sync_interval_seconds=30)
+    task_reaper = TaskReaper()
 
     tasks: list[asyncio.Task] = [
         asyncio.create_task(publisher.run_forever(), name="outbox-publisher"),
@@ -153,6 +154,7 @@ async def main() -> None:
         asyncio.create_task(task_executor.run_forever(), name="task-executor"),
         asyncio.create_task(audit_projector.run_forever(), name="audit-projector"),
         asyncio.create_task(scheduler.start(), name="cron-scheduler"),
+        asyncio.create_task(task_reaper.run_forever(), name="task-reaper"),
         asyncio.create_task(_heartbeat_loop(), name="heartbeat"),
     ]
 
@@ -177,6 +179,7 @@ async def main() -> None:
     await task_executor.stop()
     await audit_projector.stop()
     await scheduler.stop()
+    await task_reaper.stop()
     for t in tasks:
         t.cancel()
     await asyncio.gather(*tasks, return_exceptions=True)

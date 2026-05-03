@@ -88,6 +88,10 @@ class Settings(BaseSettings):
     worker_concurrency: int = Field(default=3)
     worker_poll_interval_seconds: int = Field(default=1)
 
+    # --- Task reaper (varre tasks órfãs em `running`) ---
+    task_reap_check_interval_seconds: int = Field(default=60)
+    task_reap_after_seconds: int = Field(default=360)
+
 
 @lru_cache
 def get_settings() -> Settings:

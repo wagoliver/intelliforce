@@ -6,6 +6,21 @@ import { chatReducer, initialChatState } from "../state/chatReducer";
 import type { ChatAction } from "../state/types";
 
 /**
+ * Gera um ID único pra mensagens/tool calls da UI.
+ *
+ * `crypto.randomUUID()` exige contexto seguro (HTTPS ou localhost). Se a app
+ * for acessada via IP da rede em HTTP (tipo http://192.168.0.10:3000), o
+ * método não existe. Fallback usa Date.now + Math.random — não cripto-grado,
+ * mas IDs aqui são só pra reconciliar mensagens no estado local.
+ */
+function genId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 11)}`;
+}
+
+/**
  * Lê eventos SSE do /api/proxy/chat/stream e despacha pro reducer.
  *
  * O backend manda cada evento NDJSON do OpenCode CLI como mensagem SSE
@@ -31,8 +46,8 @@ export function useChatStream() {
       const trimmed = prompt.trim();
       if (!trimmed || state.isStreaming) return;
 
-      const userId = crypto.randomUUID();
-      const agentId = crypto.randomUUID();
+      const userId = genId();
+      const agentId = genId();
       dispatch({ type: "USER_MESSAGE_SENT", id: userId, text: trimmed });
 
       // Aborta stream anterior caso ainda esteja em flight (paranoia, isStreaming já protege)
@@ -151,7 +166,7 @@ function mapEventToAction(event: any): ChatAction | null {
     const part = event?.part ?? event ?? {};
     const tool = part?.tool ?? part?.name ?? "tool";
     const description = describeToolInput(part);
-    const id = part?.id ?? part?.callID ?? crypto.randomUUID();
+    const id = part?.id ?? part?.callID ?? genId();
     return { type: "TOOL_CALL_STARTED", id, tool, description };
   }
   if (type === "tool_use_end" || type === "tool_result") {

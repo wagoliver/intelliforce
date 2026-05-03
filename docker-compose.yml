@@ -94,18 +94,18 @@ services:
       - intelliforce-net
 
   # ---------------------------------------------------------------------------
-  # Worker IntelliForce (Python + Bun + OpenCode CLI)
+  # Worker IntelliForce (consumer event-driven + invocador OpenCode)
   # ---------------------------------------------------------------------------
   worker:
     build:
       context: .
       dockerfile: infrastructure/Dockerfile.worker
+    image: intelliforce-worker:latest
     container_name: intelliforce-worker
     restart: unless-stopped
     env_file:
       - .env
     environment:
-      # Override pra garantir que aponta pros containers internos
       POSTGRES_HOST: postgres
       CLICKHOUSE_HOST: clickhouse
       REDIS_HOST: redis
@@ -127,6 +127,49 @@ services:
     networks:
       - intelliforce-net
     command: ["python", "-m", "intelliforce.worker"]
+
+  # ---------------------------------------------------------------------------
+  # API IntelliForce (FastAPI — autenticação + CRUD agentes/tasks)
+  # ---------------------------------------------------------------------------
+  api:
+    image: intelliforce-worker:latest               # mesma imagem do worker
+    container_name: intelliforce-api
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: postgres
+      CLICKHOUSE_HOST: clickhouse
+      REDIS_HOST: redis
+      REDIS_URL: redis://redis:6379/0
+      PYTHONPATH: /app
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - ./opencode:/workspace/opencode:ro
+      - ./worker:/app:ro
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      worker:
+        condition: service_started      # garante que migrations rodaram
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request, sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health', timeout=2).status == 200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - intelliforce-net
+    command:
+      - "uvicorn"
+      - "intelliforce.api.app:app"
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "8000"
+      - "--proxy-headers"
 
 # =============================================================================
 # Volumes persistentes

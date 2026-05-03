@@ -8,7 +8,7 @@ uvloop==0.19.0
 # --- Web framework (API) ---
 fastapi==0.115.0
 uvicorn[standard]==0.30.6
-pydantic==2.9.2
+pydantic[email]==2.9.2
 pydantic-settings==2.5.2
 
 # --- Database ---

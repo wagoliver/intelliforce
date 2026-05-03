@@ -60,39 +60,12 @@ html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); f
 .sidebar.is-collapsed .sb-toggle { margin-left: 0; }
 .sb-org { font-size: 11px; color: var(--text-subtle); letter-spacing: 0.04em; text-transform: uppercase; padding: 0 8px; }
 .sb-nav { display: flex; flex-direction: column; gap: 1px; width: 100%; }
-.sb-section-label { font-size: 10.5px; color: var(--text-subtle); letter-spacing: 0.08em; text-transform: uppercase; padding: 14px 8px 6px; font-weight: 500; }
-.sb-divider { height: 1px; background: var(--border); margin: 12px 4px; }
 .sb-item { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 6px; font-size: 13.5px; color: var(--text-muted); cursor: pointer; user-select: none; text-decoration: none; }
 .sidebar.is-collapsed .sb-item { justify-content: center; padding: 9px 0; }
 .sb-item:hover { background: var(--bg-hover); color: var(--text); }
 .sb-item.active { background: var(--bg-elev); color: var(--text); font-weight: 500; box-shadow: 0 1px 2px rgba(15,23,42,0.04); }
 .sb-item .ico { width: 16px; height: 16px; color: var(--text-subtle); flex-shrink: 0; }
 .sb-item.active .ico { color: var(--accent); }
-.sb-item .badge { margin-left: auto; font-family: var(--font-mono); font-size: 10.5px; color: var(--text-subtle); }
-.sb-item.active .badge { color: var(--text-muted); }
-
-/* ===== Sidebar — sub-items (nested nav) ===== */
-.sb-group { display: flex; flex-direction: column; gap: 1px; }
-.sb-subnav {
-  display: flex; flex-direction: column;
-  gap: 1px;
-  margin: 2px 0 4px 0;
-  padding-left: 12px;
-  border-left: 1px solid var(--border);
-  margin-left: 16px;
-}
-.sb-subitem {
-  display: block;
-  padding: 6px 10px;
-  border-radius: 5px;
-  font-size: 12.5px;
-  color: var(--text-subtle);
-  text-decoration: none;
-  user-select: none;
-}
-.sb-subitem:hover { background: var(--bg-hover); color: var(--text); }
-.sb-subitem.active { color: var(--text); font-weight: 500; background: var(--bg-elev); box-shadow: 0 1px 2px rgba(15,23,42,0.04); }
-.sidebar.is-collapsed .sb-subnav { display: none; }
 
 /* ===== Top bar ===== */
 .topbar { display: flex; align-items: center; justify-content: space-between; padding: 16px 40px; border-bottom: 1px solid var(--border); background: var(--bg); position: sticky; top: 0; z-index: 5; }
@@ -115,8 +88,6 @@ html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); f
 
 /* ===== Canvas ===== */
 .canvas { padding: 48px 56px 80px; max-width: 1480px; margin: 0 auto; }
-/* Full-width variant: routes that want to use the whole viewport (e.g. agent IDE) */
-.canvas.canvas-full { padding: 0; max-width: none; margin: 0; }
 
 /* ===== Org header ===== */
 .org-header {

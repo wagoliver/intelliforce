@@ -20,7 +20,6 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    document.documentElement.dataset.theme = "light";
     document.documentElement.dataset.variant = "institutional";
   }, []);
 

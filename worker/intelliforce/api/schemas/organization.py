@@ -20,6 +20,8 @@ class ActivityCreate(BaseModel):
     skill_code: str = Field(default="", max_length=8)
     target_agent_count: int = Field(default=1, ge=0, le=10000)
     position: int = Field(default=0)
+    default_agent_id: uuid.UUID | None = None
+    schedule: str | None = Field(default=None, max_length=64, description="Cron expression (5 ou 6 campos)")
 
 
 class ActivityUpdate(BaseModel):
@@ -28,6 +30,8 @@ class ActivityUpdate(BaseModel):
     skill_code: str | None = Field(default=None, max_length=8)
     target_agent_count: int | None = Field(default=None, ge=0, le=10000)
     position: int | None = None
+    default_agent_id: uuid.UUID | None = None
+    schedule: str | None = Field(default=None, max_length=64)
 
 
 class ActivityOut(BaseModel):
@@ -38,7 +42,15 @@ class ActivityOut(BaseModel):
     skill_code: str
     target_agent_count: int
     position: int
-    agent_count: int = 0  # populado via query agregada
+    default_agent_id: uuid.UUID | None = None
+    schedule: str | None = None
+    next_run: datetime | None = None  # calculado via croniter
+    # Contagens reais de AgentInstance por status (populadas via query agregada)
+    agent_count: int = 0
+    active_count: int = 0
+    idle_count: int = 0
+    offline_count: int = 0
+    error_count: int = 0
     created_at: datetime
     updated_at: datetime
 
@@ -110,6 +122,7 @@ class DepartmentOut(BaseModel):
     health: str
     squads: list[SquadOut] = []
     total_agents: int = 0
+    next_run: datetime | None = None  # próxima execução agregada (mínima entre activities)
     created_at: datetime
     updated_at: datetime
 

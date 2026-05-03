@@ -27,6 +27,7 @@ redis[hiredis]==5.0.8
 
 # --- Scheduler ---
 apscheduler==3.10.4
+croniter==3.0.3   # calcula next_run de uma cron expression
 
 # --- Auth ---
 passlib[argon2]==1.7.4

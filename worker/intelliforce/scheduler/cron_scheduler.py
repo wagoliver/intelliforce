@@ -1,9 +1,10 @@
-"""CronScheduler — APScheduler que lê agents com `schedule` definido e cria tasks.
+"""CronScheduler — APScheduler que lê Activities com schedule e cria tasks.
 
-Estratégia:
-  - Lê todos os agents ativos com schedule no banco a cada N segundos
-  - Sincroniza com o APScheduler (adiciona novos, remove os deletados)
-  - Quando o cron dispara, cria uma Task pendente (mesmo fluxo do POST /tasks)
+Modelo conceitual:
+  - Activity (cargo) tem `schedule` (cron) + `default_agent_id` (skill)
+  - Quando o cron dispara, criamos uma Task pra cada AgentInstance idle dessa activity
+    (ou só 1, se quisermos dispatch sob demanda — definimos por enquanto: 1 task)
+  - Worker/TaskExecutor consome
 """
 from __future__ import annotations
 
@@ -17,7 +18,7 @@ from apscheduler.triggers.cron import CronTrigger
 from sqlalchemy import select
 
 from intelliforce.db.base import async_session_factory
-from intelliforce.db.models.agent import Agent
+from intelliforce.db.models.activity import Activity
 from intelliforce.db.models.task import Task, TaskStatus, TaskTriggerType
 from intelliforce.events.bus import EventBus
 
@@ -25,7 +26,7 @@ log = structlog.get_logger()
 
 
 class CronScheduler:
-    """Sincroniza periodicamente o APScheduler com a config dos agents no banco."""
+    """Sincroniza periodicamente o APScheduler com schedules das Activities."""
 
     def __init__(self, sync_interval_seconds: int = 30) -> None:
         self.sync_interval = sync_interval_seconds
@@ -54,31 +55,33 @@ class CronScheduler:
             await asyncio.sleep(self.sync_interval)
 
     async def _sync_once(self) -> None:
-        """Lê agents ativos com schedule e atualiza o APScheduler."""
         async with async_session_factory() as session:
             result = await session.execute(
-                select(Agent).where(Agent.is_active.is_(True), Agent.schedule.isnot(None))
+                select(Activity).where(
+                    Activity.schedule.isnot(None),
+                    Activity.default_agent_id.isnot(None),
+                )
             )
-            agents = list(result.scalars().all())
+            activities = list(result.scalars().all())
 
-        desired_jobs = {f"agent-{a.id}": a for a in agents}
+        desired_jobs = {f"activity-{a.id}": a for a in activities}
         current_jobs = {j.id for j in self.scheduler.get_jobs()}
 
-        # Remove jobs de agents que não existem mais ou foram desativados
+        # Remove jobs órfãos
         for job_id in current_jobs - desired_jobs.keys():
-            if job_id.startswith("agent-"):
+            if job_id.startswith("activity-") or job_id.startswith("agent-"):
                 self.scheduler.remove_job(job_id)
                 log.info("scheduler.job_removed", job_id=job_id)
 
         # Adiciona/atualiza
-        for job_id, agent in desired_jobs.items():
+        for job_id, activity in desired_jobs.items():
             try:
-                trigger = CronTrigger.from_crontab(agent.schedule)  # type: ignore[arg-type]
+                trigger = CronTrigger.from_crontab(activity.schedule)  # type: ignore[arg-type]
             except Exception as e:
                 log.error(
                     "scheduler.invalid_cron",
-                    agent_id=str(agent.id),
-                    schedule=agent.schedule,
+                    activity_id=str(activity.id),
+                    schedule=activity.schedule,
                     error=str(e),
                 )
                 continue
@@ -86,30 +89,29 @@ class CronScheduler:
             self.scheduler.add_job(
                 self._dispatch_task,
                 trigger=trigger,
-                args=[str(agent.id), agent.name],
+                args=[str(activity.id), str(activity.default_agent_id), activity.name],
                 id=job_id,
                 replace_existing=True,
                 misfire_grace_time=30,
             )
 
-    async def _dispatch_task(self, agent_id: str, agent_name: str) -> None:
-        """Callback do APScheduler — cria uma Task pendente do agent."""
-        log.info("scheduler.dispatch", agent_id=agent_id, agent_name=agent_name)
+    async def _dispatch_task(self, activity_id: str, agent_id: str, activity_name: str) -> None:
+        log.info("scheduler.dispatch", activity=activity_name, activity_id=activity_id)
         try:
             async with async_session_factory() as session:
-                # Re-lê o agent pra garantir estado atual
-                result = await session.execute(select(Agent).where(Agent.id == agent_id))
-                agent = result.scalar_one_or_none()
-                if not agent or not agent.is_active:
-                    log.info("scheduler.agent_inactive_skip", agent_id=agent_id)
+                act_res = await session.execute(select(Activity).where(Activity.id == activity_id))
+                activity = act_res.scalar_one_or_none()
+                if not activity or not activity.default_agent_id:
+                    log.info("scheduler.activity_invalid_skip", activity_id=activity_id)
                     return
 
                 correlation_id = str(ulid.new())
                 task = Task(
-                    agent_id=agent.id,
+                    agent_id=activity.default_agent_id,
+                    activity_id=activity.id,
                     status=TaskStatus.PENDING.value,
-                    input={"trigger": "scheduled"},
-                    prompt=f"Execução agendada do agente {agent.name}.",
+                    input={"trigger": "scheduled", "activity_id": str(activity.id)},
+                    prompt=f"Execução agendada da activity {activity.name}.",
                     triggered_by=TaskTriggerType.SCHEDULER.value,
                     triggered_by_user_id=None,
                     correlation_id=correlation_id,
@@ -123,8 +125,9 @@ class CronScheduler:
                     aggregate_id=str(task.id),
                     aggregate_type="task",
                     payload={
-                        "agent_id": str(agent.id),
-                        "agent_name": agent.name,
+                        "agent_id": str(activity.default_agent_id),
+                        "activity_id": str(activity.id),
+                        "activity_name": activity.name,
                         "input": task.input,
                         "prompt": task.prompt,
                         "triggered_by": TaskTriggerType.SCHEDULER.value,
@@ -132,6 +135,6 @@ class CronScheduler:
                     metadata={"actor": "scheduler", "correlation_id": correlation_id},
                 )
                 await session.commit()
-                log.info("scheduler.task_created", agent=agent_name, task_id=str(task.id))
+                log.info("scheduler.task_created", activity=activity_name, task_id=str(task.id))
         except Exception:
-            log.exception("scheduler.dispatch_failed", agent_id=agent_id)
+            log.exception("scheduler.dispatch_failed", activity_id=activity_id)

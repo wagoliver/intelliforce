@@ -156,7 +156,7 @@ function App() {
 
           {/* LEFT: Navigator */}
           <aside className="cap-nav">
-            <a className="cap-nav-back" href="Department setup.html?id=finance">
+            <a className="cap-nav-back" href="/setup">
               <Svg name="back" className="ico" />
               Back to {D.activity.department}
             </a>

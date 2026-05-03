@@ -2,10 +2,23 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timezone
 
+from croniter import croniter
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+
+def _compute_next_run(schedule: str | None) -> datetime | None:
+    """Calcula próximo trigger de uma cron expression. Retorna None se inválido."""
+    if not schedule:
+        return None
+    try:
+        c = croniter(schedule, datetime.now(timezone.utc))
+        return c.get_next(datetime)
+    except Exception:
+        return None
 
 from intelliforce.api.deps import get_current_user, get_db
 from intelliforce.api.schemas.organization import (
@@ -21,6 +34,7 @@ from intelliforce.api.schemas.organization import (
 )
 from intelliforce.db.models.activity import Activity
 from intelliforce.db.models.agent import Agent
+from intelliforce.db.models.agent_instance import AgentInstance
 from intelliforce.db.models.department import Department
 from intelliforce.db.models.squad import Squad
 from intelliforce.db.models.user import User
@@ -32,31 +46,54 @@ router = APIRouter(prefix="/departments", tags=["organization"])
 # -----------------------------------------------------------------------------
 # Helpers
 # -----------------------------------------------------------------------------
-async def _agents_per_activity(db: AsyncSession) -> dict[uuid.UUID, int]:
-    """Conta agentes por activity_id."""
+async def _instance_counts_per_activity(db: AsyncSession) -> dict[uuid.UUID, dict[str, int]]:
+    """Conta AgentInstances por activity_id, agrupado por status.
+
+    Retorna: { activity_id: { "active": N, "idle": N, "offline": N, "error": N } }
+    """
     result = await db.execute(
-        select(Agent.activity_id, func.count(Agent.id))
-        .where(Agent.activity_id.isnot(None))
-        .group_by(Agent.activity_id)
+        select(
+            AgentInstance.activity_id,
+            AgentInstance.status,
+            func.count(AgentInstance.id),
+        )
+        .where(AgentInstance.activity_id.isnot(None))
+        .group_by(AgentInstance.activity_id, AgentInstance.status)
     )
-    return {row[0]: row[1] for row in result.all()}
+    counts: dict[uuid.UUID, dict[str, int]] = {}
+    for activity_id, status_str, n in result.all():
+        counts.setdefault(activity_id, {})[status_str] = n
+    return counts
 
 
 async def _serialize_department(db: AsyncSession, dept: Department) -> DepartmentOut:
-    """Serializa Department com squads, activities e contagem de agentes."""
-    counts = await _agents_per_activity(db)
+    """Serializa Department com squads, activities e contagens reais de AgentInstance."""
+    counts = await _instance_counts_per_activity(db)
     total_agents = 0
     squads_out = []
+    next_runs: list[datetime] = []
     for squad in sorted(dept.squads, key=lambda s: s.position):
         activities_out = []
         for act in sorted(squad.activities, key=lambda a: a.position):
-            count = counts.get(act.id, 0)
+            by_status = counts.get(act.id, {})
+            active = by_status.get("active", 0)
+            idle = by_status.get("idle", 0)
+            offline = by_status.get("offline", 0)
+            error = by_status.get("error", 0)
+            count = active + idle + offline + error
             total_agents += count
+            next_run = _compute_next_run(act.schedule)
+            if next_run is not None:
+                next_runs.append(next_run)
             activities_out.append(ActivityOut(
                 id=act.id, squad_id=act.squad_id, name=act.name,
                 display_name=act.display_name, skill_code=act.skill_code,
                 target_agent_count=act.target_agent_count, position=act.position,
-                agent_count=count, created_at=act.created_at, updated_at=act.updated_at,
+                default_agent_id=act.default_agent_id, schedule=act.schedule,
+                next_run=next_run,
+                agent_count=count, active_count=active, idle_count=idle,
+                offline_count=offline, error_count=error,
+                created_at=act.created_at, updated_at=act.updated_at,
             ))
         squads_out.append(SquadOut(
             id=squad.id, department_id=squad.department_id, name=squad.name,
@@ -69,6 +106,7 @@ async def _serialize_department(db: AsyncSession, dept: Department) -> Departmen
         objective=dept.objective, owner_user_id=dept.owner_user_id,
         monthly_cost_budget_usd=dept.monthly_cost_budget_usd, health=dept.health,
         squads=squads_out, total_agents=total_agents,
+        next_run=min(next_runs) if next_runs else None,
         created_at=dept.created_at, updated_at=dept.updated_at,
     )
 
@@ -309,6 +347,8 @@ async def create_activity(
         skill_code=payload.skill_code,
         target_agent_count=payload.target_agent_count,
         position=payload.position,
+        default_agent_id=payload.default_agent_id,
+        schedule=payload.schedule,
     )
     db.add(activity)
     await db.commit()

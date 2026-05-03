@@ -1,9 +1,12 @@
 "use client";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useState } from "react";
 
+import { UserMenu } from "@/components/user-menu";
 import { departments as deptsApi, type DepartmentOut } from "@/lib/api/departments";
+import { metrics as metricsApi, formatHandle, type DepartmentMetricsOut, type TaskHistoryItem, type TimelineBucket, type RecentExecution } from "@/lib/api/metrics";
 
 import "./home-v2.css";
 
@@ -13,40 +16,70 @@ const data = {
 };
 
 // Converte DepartmentOut do backend pro shape esperado pelo render do mockup.
-function toOrgShape(dept: DepartmentOut): any {
+// `metrics` é populado depois via fetch a /metrics/department/{id}.
+function toOrgShape(dept: DepartmentOut, m?: DepartmentMetricsOut | null): any {
   const teams = dept.squads.map((s) => ({
     name: s.display_name,
     roles: s.activities.map((a) => ({
+      id: a.id,
       name: a.display_name,
-      count: a.agent_count || a.target_agent_count,
+      count: a.agent_count,
       skill: a.skill_code || "···",
+      next_run: a.next_run,
+      schedule: a.schedule,
     })),
   }));
-  const totalAgents = dept.total_agents || dept.squads.reduce(
-    (sum, s) => sum + s.activities.reduce((sa, a) => sa + (a.agent_count || a.target_agent_count), 0),
-    0,
-  );
-  // Distribui contagens por status (heurística: 80% active, 10% idle, 5% offline, 5% error/0)
-  const active = Math.round(totalAgents * 0.85);
-  const idle = Math.round(totalAgents * 0.10);
-  const offline = Math.max(0, totalAgents - active - idle);
+
+  let active = 0, idle = 0, offline = 0, error = 0;
+  for (const squad of dept.squads) {
+    for (const act of squad.activities) {
+      active += act.active_count;
+      idle += act.idle_count;
+      offline += act.offline_count;
+      error += act.error_count;
+    }
+  }
+
   return {
-    id: dept.name,
+    id: dept.id,
+    slug: dept.name,
     name: dept.display_name,
-    owner: { name: "—", role: "Owner pendente" },
-    objective: dept.objective || "Sem objetivo definido.",
-    cost: { monthly: Number(dept.monthly_cost_budget_usd) || 0, currency: "USD" },
+    owner: { name: "—", role: "" },
+    objective: dept.objective || "",
+    cost: {
+      monthly: m ? Number(m.monthly_cost_usd) : Number(dept.monthly_cost_budget_usd) || 0,
+      currency: "USD",
+    },
     health: dept.health,
     teams,
-    agents: { active, idle, offline, error: 0 },
+    agents: { active, idle, offline, error },
+    next_run: dept.next_run,
     metrics: {
-      registered: 0,
-      avgHandle: "—",
-      errorPct: 0,
-      executed: 0,
-      timeline: [10, 12, 14, 18, 22, 26, 28, 30, 28, 26, 24, 20],
+      registered: m?.registered_today ?? 0,
+      avgHandle: formatHandle(m?.avg_handle_seconds ?? null),
+      errorPct: m?.error_pct ?? 0,
+      executed: m?.executed_last_12h ?? 0,
+      timeline: m?.timeline ?? Array(12).fill({ completed: 0, failed: 0 }),
+      failed: m?.failed_last_12h ?? 0,
     },
   };
+}
+
+/** Formata "em 3h 22min", "em 45min", "em 12s", "agora" */
+function formatRelative(iso: string | null, t: any): string {
+  if (!iso) return t("next_run_none");
+  const target = new Date(iso).getTime();
+  const now = Date.now();
+  const diff = Math.max(0, Math.floor((target - now) / 1000));
+  if (diff < 60) return diff < 1 ? t("running_now") : t("in_seconds", { n: diff });
+  const minutes = Math.floor(diff / 60);
+  if (minutes < 60) return t("in_minutes", { n: minutes });
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  if (hours < 24) return t("in_hours", { h: hours, m: mins });
+  const days = Math.floor(hours / 24);
+  const remH = hours % 24;
+  return t("in_days", { d: days, h: remH });
 }
 
 // ===== Org structure (mock data fiel ao protótipo) =====
@@ -213,6 +246,7 @@ const Ico: any = {
   menuRight: <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.4" fill="none" strokeLinecap="round" strokeLinejoin="round"/>,
   edit: <g stroke="currentColor" strokeWidth="1.4" fill="none" strokeLinecap="round" strokeLinejoin="round"><path d="M3 13l1-3 7-7 2 2-7 7-3 1z"/></g>,
   plus: <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" fill="none"/>,
+  cron: <g stroke="currentColor" strokeWidth="1.4" fill="none" strokeLinecap="round"><circle cx="8" cy="8" r="5.5"/><path d="M8 5v3l2 2"/></g>,
 };
 
 const SvgIcon = ({ name, ...rest }: any) => (
@@ -220,18 +254,19 @@ const SvgIcon = ({ name, ...rest }: any) => (
 );
 
 function Sidebar({ collapsed, onToggle }: any) {
+  const t = useTranslations("nav");
   const ops = [
-    { id: "home", name: "Home", icon: "home", active: true, href: "/dashboard" },
-    { id: "org", name: "Organization", icon: "org", href: "/dashboard" },
-    { id: "agents", name: "Agents", icon: "agents", badge: "2,418", href: "/agents" },
-    { id: "proc", name: "Processes", icon: "proc", badge: "14", href: "/tasks" },
-    { id: "queue", name: "Queue", icon: "queue", badge: "5,532", href: "/tasks" },
+    { id: "home", name: t("home"), icon: "home", active: true, href: "/dashboard" },
+    { id: "org", name: t("organization"), icon: "org", href: "/dashboard" },
+    { id: "agents", name: t("agents"), icon: "agents", href: "/agents" },
+    { id: "proc", name: t("processes"), icon: "proc", href: "/tasks" },
+    { id: "queue", name: t("queue"), icon: "queue", href: "/tasks" },
   ];
   const config = [
-    { id: "intg", name: "Integrations", icon: "intg", badge: "11", href: "/audit" },
-    { id: "people", name: "People", icon: "people", badge: "42", href: "/approvals" },
-    { id: "insights", name: "Insights", icon: "insights", href: "/audit" },
-    { id: "set", name: "Settings", icon: "set", href: "/logout" },
+    { id: "intg", name: t("integrations"), icon: "intg", href: "/audit" },
+    { id: "people", name: t("people"), icon: "people", href: "/approvals" },
+    { id: "insights", name: t("insights"), icon: "insights", href: "/audit" },
+    { id: "set", name: t("settings"), icon: "set", href: "/setup" },
   ];
   return (
     <aside className={`sidebar ${collapsed ? "is-collapsed" : ""}`}>
@@ -265,67 +300,60 @@ function NavItem({ name, icon, badge, active, collapsed, href }: any) {
 }
 
 function TopBar() {
+  const tc = useTranslations("common");
+  const tn = useTranslations("nav");
   return (
     <div className="topbar">
       <div className="tb-search">
         <SvgIcon className="ico" name="search" />
-        <span>Search agents, departments, processes…</span>
+        <span>{tc("search_placeholder")}</span>
         <kbd>⌘ K</kbd>
       </div>
       <div className="tb-actions">
-        <button className="tb-iconbtn" title="Toggle theme">
+        <button className="tb-iconbtn" title={tn("toggle_theme")}>
           <SvgIcon className="ico" name="theme" />
         </button>
-        <button className="tb-iconbtn" title="Notifications">
+        <button className="tb-iconbtn" title={tn("notifications")}>
           <SvgIcon className="ico" name="bell" />
           <span className="tb-iconbtn-dot" />
         </button>
-        <a href="/logout" className="tb-iconbtn" title="Sair">
-          <SvgIcon className="ico" name="set" />
-        </a>
         <div className="tb-divider" />
-        <button className="tb-account">
-          <div className="tb-avatar">{data.user.name[0]}</div>
-          <div className="tb-account-text">
-            <div className="tb-account-name">{data.user.name}</div>
-            <div className="tb-account-org">{data.user.org}</div>
-          </div>
-          <SvgIcon className="ico tb-account-chev" name="chev" />
-        </button>
+        <UserMenu userName={data.user.name} userOrg={data.user.org} userRole={data.user.role} />
       </div>
     </div>
   );
 }
 
 function OrgHeader({ orgList }: { orgList: any[] }) {
+  const t = useTranslations("dashboard");
   const totalAgents = orgList.reduce((s, d: any) => s + Object.values(d.agents).reduce((a: any, b: any) => a + b, 0), 0);
   const totalActive = orgList.reduce((s, d) => s + d.agents.active, 0);
   const totalCost = orgList.reduce((s, d) => s + d.cost.monthly, 0);
   return (
     <header className="org-header">
       <div className="oh-head">
-        <div className="oh-eyebrow">Sua força de trabalho digital</div>
+        <div className="oh-eyebrow">{t("eyebrow")}</div>
         <h1 className="oh-title">
-          <span className="num">{orgList.length}</span> departments,&nbsp;
-          <span className="num">{totalAgents.toLocaleString()}</span> digital employees on payroll.
+          <span className="num">{orgList.length}</span> {t("title_a")}&nbsp;
+          <span className="num">{totalAgents.toLocaleString()}</span> {t("title_b")}
         </h1>
       </div>
       <div className="oh-stats">
         <div className="oh-stat">
-          <div className="oh-stat-l">Active right now</div>
+          <div className="oh-stat-l">{t("active_now")}</div>
           <div className="oh-stat-v">{totalActive.toLocaleString()}<span className="oh-stat-d"> / {totalAgents.toLocaleString()}</span></div>
         </div>
         <div className="oh-stat">
-          <div className="oh-stat-l">Monthly cost</div>
+          <div className="oh-stat-l">{t("monthly_cost")}</div>
           <div className="oh-stat-v">${(totalCost/1000).toFixed(1)}k</div>
         </div>
         <div className="oh-stat">
-          <div className="oh-stat-l">Avg. SLA</div>
+          <div className="oh-stat-l">{t("avg_sla")}</div>
           <div className="oh-stat-v">99.0%</div>
         </div>
-        <a className="oh-cta" href="/agents">
+        <a className="oh-cta" href="/setup">
           <SvgIcon className="ico" name="plus" />
-          New department
+          {t("new_department")}
         </a>
       </div>
     </header>
@@ -333,8 +361,21 @@ function OrgHeader({ orgList }: { orgList: any[] }) {
 }
 
 function DepartmentRow({ dept }: any) {
+  const t = useTranslations("dashboard");
   const totalAgents = Object.values(dept.agents).reduce((a: any, b: any) => a + b, 0);
   const tiles = useMemo(() => buildAgentArray(dept.agents), [dept.id]);
+  const [history, setHistory] = useState(null as TaskHistoryItem[] | null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      const h = await metricsApi.history(dept.id, 10).catch(() => []);
+      if (!cancelled) setHistory(h);
+    }
+    load();
+    const interval = setInterval(load, 15_000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [dept.id]);
 
   return (
     <section className={`dept dept--${dept.health}`}>
@@ -343,11 +384,11 @@ function DepartmentRow({ dept }: any) {
           <h2 className="dept-name">{dept.name}</h2>
           <div className={`dept-health dept-health--${dept.health}`}>
             <span className="dot" />
-            {dept.health === "healthy" ? "On track" : "Needs attention"}
+            {dept.health === "healthy" ? t("on_track") : t("needs_attention")}
           </div>
-          <a className="dept-edit" href={`/agents`} title="Edit department">
+          <a className="dept-edit" href={`/setup`} title={t("edit")}>
             <SvgIcon className="ico" name="edit" />
-            Edit
+            {t("edit")}
           </a>
         </div>
 
@@ -355,38 +396,68 @@ function DepartmentRow({ dept }: any) {
           <div className="dm-row">
             <SvgIcon className="dm-icon" name="user" />
             <div>
-              <div className="dm-l">Owner</div>
-              <div className="dm-v"><strong>{dept.owner.name}</strong> · {dept.owner.role}</div>
+              <div className="dm-l">{t("owner")}</div>
+              <div className="dm-v">
+                <strong>{dept.owner.name}</strong>
+                {dept.owner.role && <> · {dept.owner.role}</>}
+              </div>
             </div>
           </div>
           <div className="dm-row">
             <SvgIcon className="dm-icon" name="goal" />
             <div>
-              <div className="dm-l">Objective</div>
-              <div className="dm-v">{dept.objective}</div>
+              <div className="dm-l">{t("objective")}</div>
+              <div className="dm-v">{dept.objective || t("no_objective")}</div>
             </div>
           </div>
           <div className="dm-row">
             <SvgIcon className="dm-icon" name="cost" />
             <div>
-              <div className="dm-l">Monthly cost</div>
-              <div className="dm-v"><strong>${dept.cost.monthly.toLocaleString()}</strong> / month</div>
+              <div className="dm-l">{t("monthly_cost")}</div>
+              <div className="dm-v"><strong>${dept.cost.monthly.toLocaleString()}</strong> {t("monthly_cost_per_month")}</div>
+            </div>
+          </div>
+          <div className="dm-row">
+            <SvgIcon className="dm-icon" name="cron" />
+            <div>
+              <div className="dm-l">{t("next_run")}</div>
+              <div className="dm-v">
+                <strong>{formatRelative(dept.next_run, t)}</strong>
+                {dept.next_run && (
+                  <span style={{ color: "var(--text-subtle)", marginLeft: 6, fontSize: 12 }}>
+                    · {new Date(dept.next_run).toLocaleString()}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         </div>
       </div>
 
       <div className="dept-mid">
-        <div className="dept-mid-label">Structure</div>
+        <div className="dept-mid-label">{t("structure")}</div>
         <div className="teams">
-          {dept.teams.map((t: any) => (
-            <div key={t.name} className="team">
-              <div className="team-name">{t.name}</div>
+          {dept.teams.map((team: any) => (
+            <div key={team.name} className="team">
+              <div className="team-name">{team.name}</div>
               <div className="roles">
-                {t.roles.map((r: any) => (
-                  <div key={r.name} className="role">
+                {team.roles.map((r: any) => (
+                  <div key={r.id || r.name} className="role">
                     <span className="role-skill">{r.skill}</span>
-                    <span className="role-name">{r.name}</span>
+                    <span className="role-name" style={{ display: "inline-flex", alignItems: "center", flexWrap: "wrap" }}>
+                      <span>{r.name}</span>
+                      <AlphaDots activityId={r.id} />
+                      {r.next_run && (
+                        <span style={{
+                          marginLeft: 8, fontSize: 11,
+                          color: "var(--text-subtle)",
+                          fontFamily: "var(--font-mono)",
+                        }}>
+                          — {new Date(r.next_run).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}{" "}
+                          <em style={{ fontStyle: "normal", color: "var(--accent)" }}>({t("next_run")})</em>
+                        </span>
+                      )}
+                    </span>
                     <span className="role-count">{r.count}</span>
                   </div>
                 ))}
@@ -398,7 +469,7 @@ function DepartmentRow({ dept }: any) {
 
       <div className="dept-right">
         <div className="dept-right-head">
-          <div className="dept-right-label">Workforce · {totalAgents as number} agents</div>
+          <div className="dept-right-label">{t("workforce_label")} · {totalAgents as number} {t("agents_label")}</div>
           <div className="dept-right-legend">
             <span><AgentTile status="active" size={8} /> {dept.agents.active}</span>
             <span><AgentTile status="idle" size={8} /> {dept.agents.idle}</span>
@@ -411,27 +482,29 @@ function DepartmentRow({ dept }: any) {
         </div>
         <div className="dept-metrics">
           <div className="dme">
-            <span className="dme-l">Registered</span>
+            <span className="dme-l">{t("registered_today")}</span>
             <span className="dme-v">{dept.metrics.registered.toLocaleString()}</span>
-            <span className="dme-s">activities today</span>
+            <span className="dme-s">{t("agents_label")}</span>
           </div>
           <div className="dme">
-            <span className="dme-l">Avg. handle</span>
+            <span className="dme-l">{t("avg_handle")}</span>
             <span className="dme-v">{dept.metrics.avgHandle}</span>
-            <span className="dme-s">per activity</span>
+            <span className="dme-s">{t("per_activity")}</span>
           </div>
           <div className="dme">
-            <span className="dme-l">Error rate</span>
+            <span className="dme-l">{t("error_rate")}</span>
             <span className={`dme-v ${dept.metrics.errorPct > 2 ? "warn" : ""}`}>{dept.metrics.errorPct}%</span>
-            <span className="dme-s">last 24h</span>
+            <span className="dme-s">{t("last_24h")}</span>
           </div>
         </div>
 
         <div className="dept-timeline">
           <div className="dt-head">
-            <span className="dt-label">Activities executed · last 12h</span>
-            <span className="dt-total">{dept.metrics.executed.toLocaleString()} done</span>
+            <span className="dt-label">{t("activities_last_12h")}</span>
+            <span className="dt-total">{dept.metrics.executed.toLocaleString()} {t("done_suffix")}</span>
           </div>
+          <HistorySection history={history} />
+        </div>
           <Timeline data={dept.metrics.timeline} health={dept.health} />
         </div>
       </div>
@@ -439,20 +512,155 @@ function DepartmentRow({ dept }: any) {
   );
 }
 
+function HistorySection({ history }: { history: any }) {
+  const t = useTranslations("dashboard");
+  if (history === null) return null;
+  return (
+    <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid var(--border)" }}>
+      <div style={{
+        fontSize: 11, color: "var(--text-subtle)", letterSpacing: "0.06em",
+        textTransform: "uppercase", fontWeight: 600, marginBottom: 8,
+      }}>
+        {t("history_title")} ({history.length})
+      </div>
+      {history.length === 0 ? (
+        <div style={{ fontSize: 12, color: "var(--text-muted)", padding: "4px 0" }}>
+          {t("history_empty")}
+        </div>
+      ) : (
+        <div style={{ maxHeight: 180, overflow: "auto", display: "grid", gap: 4 }}>
+          {history.map((h) => (
+            <div key={h.task_id} style={{
+              display: "grid", gridTemplateColumns: "auto 1fr auto auto",
+              gap: 10, alignItems: "center",
+              fontSize: 12, padding: "4px 0",
+            }}>
+              <StatusDot status={h.status} />
+              <div style={{ minWidth: 0 }}>
+                <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {h.activity_name ?? "—"}
+                </div>
+                {h.error_message && (
+                  <div style={{ color: "var(--danger)", fontSize: 10, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {h.error_message}
+                  </div>
+                )}
+              </div>
+              <span style={{ color: "var(--text-subtle)", fontFamily: "var(--font-mono)" }}>
+                {h.duration_seconds != null ? `${h.duration_seconds.toFixed(1)}s` : "—"}
+              </span>
+              <span style={{ color: "var(--text-subtle)", fontFamily: "var(--font-mono)" }}>
+                {new Date(h.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StatusDot({ status }: { status: string }) {
+  const color: Record<string, string> = {
+    completed: "var(--success)",
+    running: "var(--accent)",
+    pending: "var(--text-subtle)",
+    awaiting_approval: "var(--warning)",
+    failed: "var(--danger)",
+    cancelled: "var(--text-subtle)",
+  };
+  return (
+    <span style={{
+      width: 8, height: 8, borderRadius: 999,
+      background: color[status] ?? "var(--text-subtle)",
+      flexShrink: 0,
+    }} title={status} />
+  );
+}
+
 function Timeline({ data, health }: any) {
-  const w = 320, h = 36, max = Math.max(...data);
-  const barW = (w - (data.length - 1) * 3) / data.length;
-  const color = health === "attention" ? "var(--warning)" : "var(--accent)";
+  const w = 320, h = 36;
+  const buckets: TimelineBucket[] = data;
+  const totals = buckets.map((b) => (b.completed || 0) + (b.failed || 0));
+  const max = Math.max(1, ...totals);
+  const barW = (w - (buckets.length - 1) * 3) / buckets.length;
+  const successColor = health === "attention" ? "var(--warning)" : "var(--accent)";
+  const failColor = "var(--danger)";
+
   return (
     <svg className="timeline-svg" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
-      {data.map((v: number, i: number) => {
-        const bh = (v / max) * (h - 2);
+      {buckets.map((b, i) => {
+        const total = (b.completed || 0) + (b.failed || 0);
+        if (total === 0) return null;
+        const totalH = (total / max) * (h - 2);
+        const failH = ((b.failed || 0) / total) * totalH;
+        const okH = totalH - failH;
+        const x = i * (barW + 3);
         return (
-          <rect key={i} x={i * (barW + 3)} y={h - bh} width={barW} height={bh}
-            fill={color} opacity={0.35 + (v / max) * 0.65} rx={1} />
+          <g key={i}>
+            {failH > 0 && (
+              <rect x={x} y={h - failH} width={barW} height={failH}
+                fill={failColor} opacity={0.85} rx={1} />
+            )}
+            {okH > 0 && (
+              <rect x={x} y={h - failH - okH} width={barW} height={okH}
+                fill={successColor} opacity={0.4 + (total / max) * 0.6} rx={1} />
+            )}
+          </g>
         );
       })}
     </svg>
+  );
+}
+
+/**
+ * AlphaDots — bolinhas dos últimos N status, mais antigo mais transparente.
+ * Verde = completed, vermelho = failed, cinza = outros.
+ */
+function AlphaDots({ activityId }: { activityId: string }) {
+  const [items, setItems] = useState([] as RecentExecution[]);
+
+  useEffect(() => {
+    if (!activityId) return;
+    let cancelled = false;
+    async function load() {
+      const r = await metricsApi.activityRecent(activityId, 8).catch(() => []);
+      if (!cancelled) setItems(r);
+    }
+    load();
+    const interval = setInterval(load, 15_000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [activityId]);
+
+  if (items.length === 0) return null;
+
+  const colors: Record<string, string> = {
+    completed: "var(--success)",
+    failed: "var(--danger)",
+    running: "var(--accent)",
+    pending: "var(--text-subtle)",
+    cancelled: "var(--text-subtle)",
+    awaiting_approval: "var(--warning)",
+  };
+
+  return (
+    <span style={{ display: "inline-flex", gap: 3, alignItems: "center", marginLeft: 8 }}>
+      {items.slice().reverse().map((it, idx) => {
+        const total = items.length;
+        const alpha = 0.25 + (idx / Math.max(1, total - 1)) * 0.75;
+        return (
+          <span
+            key={it.task_id}
+            title={`${it.status}${it.finished_at ? " · " + new Date(it.finished_at).toLocaleString() : ""}`}
+            style={{
+              width: 7, height: 7, borderRadius: 999,
+              background: colors[it.status] ?? "var(--text-subtle)",
+              opacity: alpha,
+            }}
+          />
+        );
+      })}
+    </span>
   );
 }
 
@@ -461,16 +669,21 @@ export default function HomeV2Page() {
   const [orgData, setOrgData] = useState<any[] | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    document.documentElement.dataset.theme = "light";
-  }, []);
+  // Tema vem do cookie, aplicado em layout.tsx — não forçar aqui
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
       try {
         const list = await deptsApi.list();
-        if (!cancelled) setOrgData(list.map(toOrgShape));
+        // Busca métricas reais de cada department em paralelo
+        const withMetrics = await Promise.all(
+          list.map(async (d) => {
+            const m = await metricsApi.department(d.id).catch(() => null);
+            return toOrgShape(d, m);
+          }),
+        );
+        if (!cancelled) setOrgData(withMetrics);
       } catch {
         if (!cancelled) setOrgData([]);
       } finally {
@@ -491,11 +704,7 @@ export default function HomeV2Page() {
         <TopBar />
         <div className="canvas">
           <OrgHeader orgList={orgList} />
-          {loading && (
-            <div style={{ padding: 40, textAlign: "center", color: "var(--text-muted)" }}>
-              Carregando organização…
-            </div>
-          )}
+          {loading && <DashboardLoading />}
           {!loading && orgList.length === 0 && (
             <EmptyState />
           )}
@@ -511,18 +720,28 @@ export default function HomeV2Page() {
 }
 
 function EmptyState() {
+  const t = useTranslations("dashboard");
   return (
     <div style={{
       padding: 60, textAlign: "center", border: "1px dashed var(--border-strong)",
       borderRadius: "var(--radius-lg)", background: "var(--bg-elev)",
     }}>
-      <h2 className="oh-title" style={{ fontSize: 24 }}>Nenhum departamento ainda</h2>
+      <h2 className="oh-title" style={{ fontSize: 24 }}>{t("empty_title")}</h2>
       <p style={{ color: "var(--text-muted)", marginTop: 12, marginBottom: 24 }}>
-        Crie seu primeiro departamento pra começar a estruturar a sua força de trabalho digital.
+        {t("empty_sub")}
       </p>
       <a href="/setup" className="oh-cta" style={{ display: "inline-flex" }}>
-        + Criar primeiro department
+        + {t("create_first")}
       </a>
+    </div>
+  );
+}
+
+function DashboardLoading() {
+  const t = useTranslations("dashboard");
+  return (
+    <div style={{ padding: 40, textAlign: "center", color: "var(--text-muted)" }}>
+      {t("loading_org")}
     </div>
   );
 }

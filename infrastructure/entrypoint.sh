@@ -106,6 +106,31 @@ if [ -d "$SOURCE_DIR" ]; then
     else
         echo "[entrypoint] AVISO: seeds não aplicados (SEED_DIR=$SEED_DIR, TARGET=$TARGET_OPENCODE)"
     fi
+
+    # -------------------------------------------------------------------------
+    # Validação da config OpenCode (fail-fast)
+    #
+    # Roda `opencode agent list` que carrega TODA a config (opencode.json +
+    # agents/skills/commands frontmatter) e falha com mensagem clara se algum
+    # arquivo estiver malformado. Sem isso, agente quebrado faz o chat parar
+    # silenciosamente — só descobrimos rodando comando manualmente no container.
+    #
+    # Pra desabilitar (raro): export OPENCODE_VALIDATE_ON_START=false
+    # -------------------------------------------------------------------------
+    if [ "${OPENCODE_VALIDATE_ON_START:-true}" = "true" ] && command -v opencode >/dev/null 2>&1; then
+        echo "[entrypoint] Validando config OpenCode..."
+        if ! opencode_err=$(cd "$RUNTIME_DIR" && opencode agent list 2>&1 >/dev/null); then
+            echo "[entrypoint] ❌ CONFIG OPENCODE INVÁLIDA — container não vai subir."
+            echo "[entrypoint] -----------------------------------------------------"
+            echo "$opencode_err" | tail -30
+            echo "[entrypoint] -----------------------------------------------------"
+            echo "[entrypoint] Corrija o(s) arquivo(s) acima em opencode/.opencode/"
+            echo "[entrypoint] e reinicie o container. (Pra pular esta verificação:"
+            echo "[entrypoint]  export OPENCODE_VALIDATE_ON_START=false)"
+            exit 1
+        fi
+        echo "[entrypoint] ✓ Config OpenCode válida"
+    fi
 else
     echo "[entrypoint] AVISO: $SOURCE_DIR não encontrado — pulando setup do OpenCode."
 fi

@@ -26,28 +26,63 @@ access_token via Azure AD e envia/recebe mensagens em channels.
 Cadastrar pela UI `/vault` → Novo segredo → slug `microsoft-teams` → 3
 campos. Tudo num único secret pra rotação atômica.
 
-### 2. Azure AD — permissions Application
+### 2. Azure AD App Registration — permissions Application
 
-No App Registration → API Permissions → Add → Microsoft Graph →
-**Application permissions** (não Delegated):
+No Azure Portal → App Registration → API Permissions → Add →
+Microsoft Graph → **Application permissions** (não Delegated):
 
 | Permission | Pra quê |
 |---|---|
-| `Team.ReadBasic.All` | Listar teams (resolver nome → ID) |
+| `Team.ReadBasic.All` | Listar teams (resolver nome → ID, listen, send) |
 | `Channel.ReadBasic.All` | Listar channels |
-| `ChannelMessage.Send.Group` (RSC) | Mandar mensagem em channel |
-| `ChannelMessage.Read.Group` (RSC) | Ler mensagens (pra `listen`) |
+| `ChannelMessage.Read.All` | Ler mensagens (pra `listen`) |
 | `User.Read.All` | Resolver UPN → user_id (pra mention) |
 
 Depois de adicionar: **Grant admin consent** (botão azul). Sem isso, todas
 as chamadas retornam 403.
 
-### 3. RSC (Resource-Specific Consent) no Team alvo
+### 3. Teams App package — RSC pra `send` em channel
 
-`ChannelMessage.Send.Group` e `ChannelMessage.Read.Group` são **RSC** —
-cada Team precisa adicionar o app uma vez. No Teams desktop:
-**Manage team → Apps → Add → seu app**. Sem isso, dá 403 mesmo com admin
-consent.
+⚠️ **CRÍTICO — leia antes de sugerir qualquer coisa ao user:**
+
+A permission **`ChannelMessage.Send.Group` NÃO existe** como Application
+permission no Azure Portal. Se você procurar em **Add a permission →
+Microsoft Graph → Application permissions**, ela **não vai aparecer**.
+Ela é **RSC-only** (Resource-Specific Consent), declarável apenas em
+**manifest de Teams App package**.
+
+**Não sugira ao user "vai no Azure e adiciona ChannelMessage.Send.Group"
+— isso é caça-fantasma, ela não está lá.** O caminho correto é:
+
+1. Gerar o package customizado em `tools/teams-app-package/`:
+   ```bash
+   cd tools/teams-app-package
+   python make-package.py --client-id <CLIENT_ID>
+   ```
+   (Output: `intelliforce-teams.zip`)
+2. Upload em **https://admin.teams.microsoft.com → Teams apps →
+   Manage apps → Upload new app**.
+3. Adicionar app no Team alvo: Teams desktop → Team → **Manage team →
+   Apps → More apps → IntelliForce → Add**.
+
+Sem esses 3 passos, `send` em channel sempre retornará 403, mesmo com
+admin consent dado pra todas as Application permissions disponíveis no
+portal.
+
+Detalhes em `tools/teams-app-package/README.md`.
+
+### Quando o user reportar `PERMISSION_DENIED` no `send`
+
+Sequência **obrigatória** de diagnóstico (não chute):
+
+1. `list-teams` funciona? Se não, o problema é Application permissions
+   (Team.ReadBasic.All) ou auth — direcione pro Azure Portal.
+2. `list-teams` funciona mas `send` não? Então o problema é RSC. Não
+   é coisa do Azure Portal — é o Teams App package. Direcione pro
+   `tools/teams-app-package/`.
+3. Se o user já uploadou o package e ainda dá 403: provavelmente o
+   app ainda não foi adicionado ao Team alvo (passo 3 acima). RSC é
+   por-Team, não por-tenant.
 
 ## Comandos
 

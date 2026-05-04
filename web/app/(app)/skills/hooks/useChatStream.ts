@@ -323,41 +323,122 @@ function describeUnknownEvent(event: any): string {
 /**
  * Descreve a invocação de um tool de forma legível, sem dump JSON gigante.
  * Mantém prioridade dos campos mais úteis pra cada tool conhecido.
+ *
+ * Estratégia em 3 camadas:
+ *   1. Switch por tool name conhecido (bash, read, write, skill, etc.)
+ *   2. Fallback por campo conhecido (command, path, url, pattern, ...)
+ *   3. Último recurso: primeira string razoável do input
  */
 function describeToolInput(part: any): string {
   const tool = String(part?.tool ?? part?.name ?? "").toLowerCase();
-  const input = part?.input ?? part?.params ?? {};
+  const input = part?.input ?? part?.params ?? part?.arguments ?? {};
   if (typeof input === "string") return input.slice(0, 200);
   if (typeof input !== "object" || input === null) return "";
 
-  // Bash: mostra o comando em si, truncado
+  // ── Tools conhecidas ───────────────────────────────────────────────────────
+
+  // Bash: o comando em si
   if (tool === "bash" && input.command) {
     return String(input.command).slice(0, 200);
   }
 
-  // Write: path + tamanho do conteúdo (opcional)
-  if (tool === "write" && (input.file_path || input.path)) {
-    const path = String(input.file_path ?? input.path);
-    const content = input.content ?? input.text ?? "";
-    const len = typeof content === "string" ? content.length : 0;
-    return len > 0 ? `${path}  ·  ${len} chars` : path;
+  // Skill (OpenCode skill invocation): nome da skill + args opcionais
+  if (tool === "skill") {
+    const name =
+      input.skill ??
+      input.skill_name ??
+      input.name ??
+      input.id ??
+      "";
+    const args = input.arguments ?? input.args ?? input.input ?? "";
+    const argStr =
+      typeof args === "string"
+        ? args
+        : Object.keys(args || {}).length
+          ? JSON.stringify(args)
+          : "";
+    if (name && argStr) return `${name}  ·  ${argStr.slice(0, 120)}`;
+    if (name) return String(name).slice(0, 200);
   }
 
   // Read: path + range opcional
-  if (tool === "read" && (input.file_path || input.path)) {
-    const path = String(input.file_path ?? input.path);
+  if (tool === "read" && (input.file_path || input.path || input.filePath)) {
+    const path = String(input.file_path ?? input.filePath ?? input.path);
     if (input.offset != null || input.limit != null) {
       return `${path}  (offset ${input.offset ?? 0}, limit ${input.limit ?? "—"})`;
     }
     return path;
   }
 
-  // Edit: path
-  if (tool === "edit" && (input.file_path || input.path)) {
-    return String(input.file_path ?? input.path);
+  // Write: path + tamanho do conteúdo
+  if (tool === "write" && (input.file_path || input.path || input.filePath)) {
+    const path = String(input.file_path ?? input.filePath ?? input.path);
+    const content = input.content ?? input.text ?? "";
+    const len = typeof content === "string" ? content.length : 0;
+    return len > 0 ? `${path}  ·  ${len} chars` : path;
   }
 
-  // Fallback genérico — pega primeiro campo string conhecido
-  const fallback = input.command ?? input.path ?? input.file_path ?? input.url ?? "";
-  return String(fallback).slice(0, 200);
+  // Edit: path
+  if (tool === "edit" && (input.file_path || input.path || input.filePath)) {
+    return String(input.file_path ?? input.filePath ?? input.path);
+  }
+
+  // Glob/Grep: pattern + path opcional
+  if ((tool === "glob" || tool === "grep") && input.pattern) {
+    const where = input.path ? `  in ${input.path}` : "";
+    return `${input.pattern}${where}`.slice(0, 200);
+  }
+
+  // WebFetch: URL
+  if ((tool === "webfetch" || tool === "fetch") && input.url) {
+    return String(input.url).slice(0, 200);
+  }
+
+  // Task / Agent: subagent + descrição
+  if ((tool === "task" || tool === "agent") && (input.description || input.prompt)) {
+    const sub = input.subagent_type || input.agent || "";
+    const desc = input.description || input.prompt || "";
+    return sub ? `${sub}  ·  ${desc}`.slice(0, 200) : String(desc).slice(0, 200);
+  }
+
+  // Todo*: ações
+  if (tool === "todowrite" && Array.isArray(input.todos)) {
+    return `${input.todos.length} todo(s)`;
+  }
+  if (tool === "todoread") return "lista todos";
+
+  // ── Fallbacks ──────────────────────────────────────────────────────────────
+
+  // Campos conhecidos comuns, em ordem de probabilidade de utilidade
+  const known: Array<unknown> = [
+    input.command,
+    input.path,
+    input.file_path,
+    input.filePath,
+    input.url,
+    input.pattern,
+    input.description,
+    input.prompt,
+    input.skill,
+    input.skill_name,
+    input.name,
+    input.query,
+  ];
+  for (const candidate of known) {
+    if (typeof candidate === "string" && candidate.trim()) {
+      return candidate.slice(0, 200);
+    }
+  }
+
+  // Último recurso: primeira string não-trivial em qualquer chave
+  for (const [k, v] of Object.entries(input)) {
+    if (k === "type" || k === "id") continue;
+    if (typeof v === "string" && v.trim() && v.length < 500) {
+      return `${k}: ${v.slice(0, 180)}`;
+    }
+  }
+
+  // Sem absolutamente nada — sinaliza só os nomes das chaves pra contexto mínimo
+  const keys = Object.keys(input).filter((k) => k !== "type" && k !== "id");
+  return keys.length ? `(${keys.join(", ")})` : "";
 }

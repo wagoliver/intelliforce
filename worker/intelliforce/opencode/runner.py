@@ -226,6 +226,11 @@ class OpenCodeRunner:
             assert proc.stdout is not None  # subprocess garante PIPE → não-nulo
             timed_out = False
 
+            # Modo debug: setar OPENCODE_LOG_RAW_EVENTS=1 no .env loga cada
+            # evento NDJSON do CLI (truncado). Útil pra mapear shapes de tool
+            # calls que ainda caem no fallback genérico no frontend.
+            log_raw = os.environ.get("OPENCODE_LOG_RAW_EVENTS", "").lower() in ("1", "true", "yes")
+
             async def read_lines() -> AsyncIterator[dict[str, Any]]:
                 assert proc is not None and proc.stdout is not None
                 async for raw in proc.stdout:
@@ -237,6 +242,14 @@ class OpenCodeRunner:
                     except json.JSONDecodeError:
                         log.warning("opencode.cli_stream_bad_json", line=line[:200])
                         continue
+                    if log_raw:
+                        # Trunca pra evitar payload gigante (ex.: write com
+                        # content de 500kb)
+                        log.info(
+                            "opencode.cli_event",
+                            type=event.get("type"),
+                            preview=json.dumps(event, ensure_ascii=False)[:500],
+                        )
                     yield event
 
             try:

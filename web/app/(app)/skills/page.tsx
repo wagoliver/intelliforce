@@ -575,7 +575,7 @@ function ToolCallLine({
       <span className="skills-toolcall-icon" aria-hidden="true">
         {call.status === "running" ? "" : call.status === "done" ? "✓" : "✕"}
       </span>
-      <span className="skills-toolcall-tool">{call.tool}</span>
+      <span className="skills-toolcall-tool">{prettyToolName(call.tool)}</span>
       {call.description && <span className="skills-toolcall-desc">{call.description}</span>}
       <LiveClock startedAt={call.startedAt} finishedAt={call.finishedAt} />
     </motion.div>
@@ -588,6 +588,33 @@ function formatElapsed(ms: number): string {
   const min = Math.floor(s / 60);
   const rem = s - min * 60;
   return `${min}m ${rem.toFixed(0)}s`;
+}
+
+/**
+ * Capitaliza o nome do tool pra display (bash → Bash, todoread → TodoRead).
+ * Lookup explícito pra alguns casos comuns; default = capitalize first letter.
+ */
+const TOOL_NAME_PRETTY: Record<string, string> = {
+  bash: "Bash",
+  read: "Read",
+  write: "Write",
+  edit: "Edit",
+  glob: "Glob",
+  grep: "Grep",
+  webfetch: "WebFetch",
+  fetch: "Fetch",
+  task: "Task",
+  agent: "Agent",
+  skill: "Skill",
+  todoread: "TodoRead",
+  todowrite: "TodoWrite",
+  multiedit: "MultiEdit",
+  notebookedit: "NotebookEdit",
+};
+function prettyToolName(tool: string): string {
+  if (!tool) return "tool";
+  const k = tool.toLowerCase();
+  return TOOL_NAME_PRETTY[k] ?? (k.charAt(0).toUpperCase() + k.slice(1));
 }
 
 /**
@@ -646,14 +673,14 @@ function LiveStatus({
     // Texto streaming + tool em paralelo: prioridade visual ao tool
     // (texto já é visível na bolha, então o status mostra o que NÃO é óbvio)
     const desc = lastRunningTool.description ? ` · ${lastRunningTool.description}` : "";
-    label = `${lastRunningTool.tool}${desc}`;
+    label = `${prettyToolName(lastRunningTool.tool)}${desc}`;
     kind = "tool";
   } else if (hasText) {
     label = "Gerando resposta…";
     kind = "writing";
   } else if (lastRunningTool) {
     const desc = lastRunningTool.description ? ` · ${lastRunningTool.description}` : "";
-    label = `${lastRunningTool.tool}${desc}`;
+    label = `${prettyToolName(lastRunningTool.tool)}${desc}`;
     kind = "tool";
   } else if (lastThinking?.label) {
     label = lastThinking.label;

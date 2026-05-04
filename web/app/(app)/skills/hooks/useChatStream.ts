@@ -123,8 +123,12 @@ export function useChatStream() {
               sessionEmitted = true;
             }
 
-            const action = mapEventToAction(event);
-            if (action) dispatch(action);
+            const result = mapEventToAction(event);
+            if (Array.isArray(result)) {
+              for (const a of result) dispatch(a);
+            } else if (result) {
+              dispatch(result);
+            }
           }
         }
       } catch (err) {
@@ -212,7 +216,7 @@ function extractToolId(event: any): string {
   );
 }
 
-function mapEventToAction(event: any): ChatAction | null {
+function mapEventToAction(event: any): ChatAction | ChatAction[] | null {
   const type: string = event?.type ?? "";
 
   // Debug em modo dev: loga TODOS os eventos do CLI no console pra
@@ -254,31 +258,47 @@ function mapEventToAction(event: any): ChatAction | null {
     };
   }
 
-  // Tool calls — INÍCIO. Detecta por type OU por shape (presença de tool name).
-  const looksLikeToolStart =
+  // Tool calls — OpenCode emite `tool_use` 1x por tool, com state.status
+  // indicando running/completed/error. Detecta também shapes alternativos.
+  const looksLikeToolEvent =
     TOOL_START_TYPES.has(type) ||
-    (event?.part?.type && TOOL_START_TYPES.has(event.part.type)) ||
-    // shape match: evento com `part.tool` ou `part.name` E sem result/error
+    TOOL_END_TYPES.has(type) ||
+    (event?.part?.type && (
+      TOOL_START_TYPES.has(event.part.type) ||
+      event.part.type === "tool"
+    )) ||
     (event?.part &&
       typeof event.part === "object" &&
-      (event.part.tool || event.part.name) &&
-      event.part.input !== undefined &&
-      event.part.output === undefined);
+      (event.part.tool || event.part.name));
 
-  if (looksLikeToolStart) {
+  if (looksLikeToolEvent) {
     const part = event?.part ?? event ?? {};
     const tool = part?.tool ?? part?.name ?? type ?? "tool";
     const description = describeToolInput(part);
     const id = extractToolId(event) || genId();
-    return { type: "TOOL_CALL_STARTED", id, tool: String(tool), description };
-  }
 
-  if (TOOL_END_TYPES.has(type)) {
-    const id = extractToolId(event);
-    if (!id) return null;
-    const part = event?.part ?? event ?? {};
-    const isError = part?.is_error ?? part?.error ?? false;
-    return { type: "TOOL_CALL_FINISHED", id, status: isError ? "error" : "done" };
+    // OpenCode shape: `state.status` = "running" | "completed" | "error"
+    // dentro de `part.state`. Pode também vir em `part.status` em variações.
+    const status = part?.state?.status ?? part?.status;
+    const isExplicitEnd = TOOL_END_TYPES.has(type);
+    const isExplicitError =
+      status === "error" || part?.is_error || part?.error === true;
+
+    // Se já temos status final, emite STARTED + FINISHED juntos pra
+    // garantir que o spinner não fique órfão.
+    if (status === "completed" || isExplicitEnd || isExplicitError) {
+      return [
+        { type: "TOOL_CALL_STARTED", id, tool: String(tool), description },
+        {
+          type: "TOOL_CALL_FINISHED",
+          id,
+          status: isExplicitError ? "error" : "done",
+        },
+      ];
+    }
+
+    // Status running (ou indefinido) — só START por enquanto.
+    return { type: "TOOL_CALL_STARTED", id, tool: String(tool), description };
   }
 
   // Boundary events sem payload útil — descarta
@@ -341,23 +361,33 @@ function describeUnknownEvent(event: any): string {
  */
 function describeToolInput(part: any): string {
   const tool = String(part?.tool ?? part?.name ?? "").toLowerCase();
-  const input = part?.input ?? part?.params ?? part?.arguments ?? {};
+  // OpenCode shape novo: state.input. Fallbacks pra variações antigas.
+  const input =
+    part?.state?.input ??
+    part?.input ??
+    part?.params ??
+    part?.arguments ??
+    {};
   if (typeof input === "string") return input.slice(0, 200);
   if (typeof input !== "object" || input === null) return "";
 
   // ── Tools conhecidas ───────────────────────────────────────────────────────
 
-  // Bash: o comando em si
-  if (tool === "bash" && input.command) {
-    return String(input.command).slice(0, 200);
+  // Bash: o comando em si. Se input.description (PT-BR explicativo) existe,
+  // mostra primeiro porque é mais legível pro user.
+  if (tool === "bash" && (input.command || input.description)) {
+    if (input.description && input.command) {
+      return `${input.description.slice(0, 80)}  →  ${String(input.command).slice(0, 120)}`;
+    }
+    return String(input.command || input.description).slice(0, 200);
   }
 
   // Skill (OpenCode skill invocation): nome da skill + args opcionais
   if (tool === "skill") {
     const name =
+      input.name ??           // OpenCode shape novo
       input.skill ??
       input.skill_name ??
-      input.name ??
       input.id ??
       "";
     const args = input.arguments ?? input.args ?? input.input ?? "";

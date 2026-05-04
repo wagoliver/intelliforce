@@ -223,6 +223,65 @@ export function FileMarkdownIcon({ size = 18, className, glow = false }: IconPro
 }
 
 /* -------------------------------------------------------------------------- */
+/* File python — documento com marca .py em azul/amarelo (cor da linguagem)   */
+/* -------------------------------------------------------------------------- */
+
+export function FilePythonIcon({ size = 18, className, glow = false }: IconProps) {
+  const id = useId();
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      style={glow ? { filter: `drop-shadow(0 0 5px oklch(0.78 0.13 215 / 0.5))` } : undefined}
+    >
+      <defs>
+        <linearGradient id={`fpy-body-${id}`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="oklch(0.32 0.04 250)" />
+          <stop offset="100%" stopColor="oklch(0.20 0.02 250)" />
+        </linearGradient>
+        <linearGradient id={`fpy-fold-${id}`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="oklch(0.55 0.08 250)" />
+          <stop offset="100%" stopColor="oklch(0.40 0.06 250)" />
+        </linearGradient>
+        {/* Cores oficiais da logo Python: azul + amarelo */}
+        <linearGradient id={`fpy-blue-${id}`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="oklch(0.62 0.14 240)" />
+          <stop offset="100%" stopColor="oklch(0.45 0.16 250)" />
+        </linearGradient>
+        <linearGradient id={`fpy-yellow-${id}`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="oklch(0.86 0.16 95)" />
+          <stop offset="100%" stopColor="oklch(0.72 0.18 80)" />
+        </linearGradient>
+      </defs>
+      {/* corpo do documento */}
+      <path
+        d="M5 3 L14 3 L20 9 L20 21 L5 21 Z"
+        fill={`url(#fpy-body-${id})`}
+        stroke="oklch(0.55 0.10 215)"
+        strokeWidth="1"
+        strokeOpacity="0.55"
+      />
+      {/* dobra no canto superior direito */}
+      <path
+        d="M14 3 L14 9 L20 9 Z"
+        fill={`url(#fpy-fold-${id})`}
+        stroke="oklch(0.55 0.10 215)"
+        strokeWidth="1"
+        strokeOpacity="0.4"
+      />
+      {/* mini-logo Python (duas serpentes entrelaçadas — abstraído em 2 retângulos arredondados) */}
+      <rect x="7.5" y="13" width="6" height="3.5" rx="1.2" fill={`url(#fpy-blue-${id})`} />
+      <rect x="10.5" y="15.5" width="6" height="3.5" rx="1.2" fill={`url(#fpy-yellow-${id})`} />
+      <circle cx="9" cy="14.4" r="0.55" fill="oklch(0.95 0.02 250)" />
+      <circle cx="15" cy="17.1" r="0.55" fill="oklch(0.20 0.05 80)" />
+    </svg>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
 /* Lock badge — overlay pra arquivos/pastas imutáveis (seeds)                  */
 /* -------------------------------------------------------------------------- */
 

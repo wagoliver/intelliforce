@@ -34,7 +34,7 @@ export default function SkillsPage() {
   const { state, send, abort } = useChatStream();
   const { tree, loading: treeLoading, error: treeError, refetch } = useOpenCodeTree();
   const [input, setInput] = useState("");
-  const [selected, setSelected] = useState<{ kind: OpenCodeFile["kind"]; slug: string } | null>(null);
+  const [selected, setSelected] = useState<{ kind: OpenCodeFile["kind"] | "script"; slug: string } | null>(null);
   const [collapsed, setCollapsed] = useState(false);
   const [recentlyCreated, setRecentlyCreated] = useState<Set<string>>(new Set());
   const [agent, setAgent] = useState<AgentKey>("operator");
@@ -204,7 +204,7 @@ export default function SkillsPage() {
           selected={selected}
           collapsed={collapsed}
           recentlyCreated={recentlyCreated}
-          onSelect={(f) => setSelected({ kind: f.kind, slug: f.slug })}
+          onSelect={(item) => setSelected({ kind: item.kind, slug: item.slug })}
           onToggleCollapsed={() => setCollapsed((c) => !c)}
         />
 
@@ -686,5 +686,6 @@ function collectKeys(tree: OpenCodeTree): Set<string> {
   tree.skills.forEach((s) => keys.add(`skill/${s.slug}`));
   tree.agents.forEach((a) => keys.add(`agent/${a.slug}`));
   tree.commands.forEach((c) => keys.add(`command/${c.slug}`));
+  tree.scripts.forEach((s) => keys.add(`script/${s.slug}`));
   return keys;
 }

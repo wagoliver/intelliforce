@@ -3,10 +3,11 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
 
-import type { OpenCodeFile, OpenCodeTree } from "../hooks/useOpenCodeTree";
+import type { OpenCodeFile, OpenCodeScript, OpenCodeTree } from "../hooks/useOpenCodeTree";
 import {
   ChevronIcon,
   FileMarkdownIcon,
+  FilePythonIcon,
   FolderClosedIcon,
   FolderEmptyIcon,
   FolderOpenIcon,
@@ -38,7 +39,13 @@ const SEED_KEYS = new Set<string>([
   "skill/intelliforce-metrics",
 ]);
 
-type Selected = { kind: OpenCodeFile["kind"]; slug: string } | null;
+type SelectableKind = OpenCodeFile["kind"] | "script";
+type Selected = { kind: SelectableKind; slug: string } | null;
+
+/** Item clicável no tree — file (md) ou script (py). */
+export type SelectableItem =
+  | { kind: "skill" | "agent" | "command"; slug: string; description?: string | null }
+  | { kind: "script"; slug: string; description?: string | null };
 
 type Props = {
   tree: OpenCodeTree;
@@ -47,7 +54,7 @@ type Props = {
   selected: Selected;
   collapsed: boolean;
   recentlyCreated: Set<string>;
-  onSelect: (file: OpenCodeFile) => void;
+  onSelect: (item: SelectableItem) => void;
   onToggleCollapsed: () => void;
 };
 
@@ -76,11 +83,14 @@ export function FileTree({
       "root:agents",
       "root:skills",
       "root:commands",
+      "root:scripts",
       "bundle:intelliforce",
+      "scripts-bundle:intelliforce",
     ]),
   );
 
-  const total = tree.skills.length + tree.agents.length + tree.commands.length;
+  const total =
+    tree.skills.length + tree.agents.length + tree.commands.length + tree.scripts.length;
 
   const toggle = (key: string) =>
     setExpanded((prev) => {
@@ -256,8 +266,306 @@ export function FileTree({
             ))
           )}
         </CategoryFolder>
+
+        {/* scripts — agrupa por skill dona. Espelha o disco
+            (<skill>/scripts/<file>.py). Bundle "intelliforce/" pra system seeds. */}
+        <CategoryFolder
+          label="scripts"
+          count={tree.scripts.length}
+          expanded={expanded.has("root:scripts")}
+          onToggle={() => toggle("root:scripts")}
+          empty={tree.scripts.length === 0}
+        >
+          {tree.scripts.length === 0 ? (
+            <div className="skills-tree-empty-line">vazio</div>
+          ) : (
+            <ScriptsContent
+              scripts={tree.scripts}
+              expanded={expanded}
+              selected={selected}
+              onToggle={toggle}
+              onSelect={onSelect}
+            />
+          )}
+        </CategoryFolder>
       </div>
     </aside>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Scripts content — agrupado por skill (intelliforce bundle + custom)        */
+/* -------------------------------------------------------------------------- */
+
+function ScriptsContent({
+  scripts,
+  expanded,
+  selected,
+  onToggle,
+  onSelect,
+}: {
+  scripts: OpenCodeScript[];
+  expanded: Set<string>;
+  selected: Selected;
+  onToggle: (key: string) => void;
+  onSelect: (item: SelectableItem) => void;
+}) {
+  // Agrupa scripts por skill_slug
+  const bySkill = new Map<string, OpenCodeScript[]>();
+  for (const s of scripts) {
+    const arr = bySkill.get(s.skill_slug) ?? [];
+    arr.push(s);
+    bySkill.set(s.skill_slug, arr);
+  }
+
+  const intelliforceSkills = [...bySkill.keys()]
+    .filter((s) => s.startsWith("intelliforce-"))
+    .sort();
+  const otherSkills = [...bySkill.keys()]
+    .filter((s) => !s.startsWith("intelliforce-"))
+    .sort();
+
+  return (
+    <>
+      {intelliforceSkills.length > 0 && (
+        <ScriptIntelliforceBundle
+          skillSlugs={intelliforceSkills}
+          bySkill={bySkill}
+          expanded={expanded}
+          selected={selected}
+          onToggle={onToggle}
+          onSelect={onSelect}
+        />
+      )}
+      {otherSkills.map((skillSlug) => {
+        const folderKey = `script-folder:${skillSlug}`;
+        const isExpanded = expanded.has(folderKey);
+        return (
+          <ScriptSkillFolder
+            key={`script-folder/${skillSlug}`}
+            skillSlug={skillSlug}
+            scripts={bySkill.get(skillSlug) ?? []}
+            expanded={isExpanded}
+            selected={selected}
+            onToggle={() => onToggle(folderKey)}
+            onSelect={onSelect}
+          />
+        );
+      })}
+    </>
+  );
+}
+
+/* IntelliforceBundle equivalente pra scripts (system seeds) */
+function ScriptIntelliforceBundle({
+  skillSlugs,
+  bySkill,
+  expanded,
+  selected,
+  onToggle,
+  onSelect,
+}: {
+  skillSlugs: string[];
+  bySkill: Map<string, OpenCodeScript[]>;
+  expanded: Set<string>;
+  selected: Selected;
+  onToggle: (key: string) => void;
+  onSelect: (item: SelectableItem) => void;
+}) {
+  const bundleKey = "scripts-bundle:intelliforce";
+  const bundleExpanded = expanded.has(bundleKey);
+  const Icon = bundleExpanded ? FolderOpenIcon : FolderClosedIcon;
+  const total = skillSlugs.reduce((n, s) => n + (bySkill.get(s)?.length ?? 0), 0);
+
+  return (
+    <div className="skills-tree-node">
+      <button
+        type="button"
+        className="skills-tree-row skills-tree-row--folder skills-tree-row--nested"
+        onClick={() => onToggle(bundleKey)}
+        aria-expanded={bundleExpanded}
+        title="Scripts das skills do operator (system seeds)"
+        onMouseMove={(e) => {
+          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+          e.currentTarget.style.setProperty("--mx", `${e.clientX - rect.left}px`);
+          e.currentTarget.style.setProperty("--my", `${e.clientY - rect.top}px`);
+        }}
+      >
+        <span className="skills-tree-chevron" style={{ color: "var(--text-subtle)" }}>
+          <ChevronIcon expanded={bundleExpanded} />
+        </span>
+        <span className="skills-tree-icon">
+          <Icon size={18} />
+          <span className="skills-tree-lock-badge" aria-label="Imutável">
+            <LockBadge />
+          </span>
+        </span>
+        <span className="skills-tree-name skills-tree-name--mono">intelliforce</span>
+        <span className="skills-tree-count">{total}</span>
+      </button>
+      <AnimatePresence initial={false}>
+        {bundleExpanded && (
+          <motion.div
+            key="children"
+            className="skills-tree-children"
+            {...ANIM}
+            style={{ overflow: "hidden" }}
+          >
+            <div className="skills-tree-children-inner">
+              {skillSlugs.map((skillSlug) => {
+                const folderKey = `script-folder:${skillSlug}`;
+                const isExpanded = expanded.has(folderKey);
+                return (
+                  <ScriptSkillFolder
+                    key={`script-folder/${skillSlug}`}
+                    skillSlug={skillSlug}
+                    scripts={bySkill.get(skillSlug) ?? []}
+                    expanded={isExpanded}
+                    selected={selected}
+                    onToggle={() => onToggle(folderKey)}
+                    onSelect={onSelect}
+                    isSeed
+                    nameStripPrefix="intelliforce-"
+                  />
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+/* Pasta por skill que tem scripts — abre listando os .py */
+function ScriptSkillFolder({
+  skillSlug,
+  scripts,
+  expanded,
+  selected,
+  onToggle,
+  onSelect,
+  isSeed = false,
+  nameStripPrefix,
+}: {
+  skillSlug: string;
+  scripts: OpenCodeScript[];
+  expanded: boolean;
+  selected: Selected;
+  onToggle: () => void;
+  onSelect: (item: SelectableItem) => void;
+  isSeed?: boolean;
+  nameStripPrefix?: string;
+}) {
+  const Icon = expanded ? FolderOpenIcon : FolderClosedIcon;
+  const displayName = nameStripPrefix
+    ? skillSlug.replace(new RegExp(`^${nameStripPrefix}`), "")
+    : skillSlug;
+  return (
+    <div className="skills-tree-node">
+      <button
+        type="button"
+        className="skills-tree-row skills-tree-row--folder skills-tree-row--nested"
+        onClick={onToggle}
+        aria-expanded={expanded}
+        title={`scripts da skill ${skillSlug}`}
+        onMouseMove={(e) => {
+          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+          e.currentTarget.style.setProperty("--mx", `${e.clientX - rect.left}px`);
+          e.currentTarget.style.setProperty("--my", `${e.clientY - rect.top}px`);
+        }}
+      >
+        <span className="skills-tree-chevron" style={{ color: "var(--text-subtle)" }}>
+          <ChevronIcon expanded={expanded} />
+        </span>
+        <span className="skills-tree-icon">
+          <Icon size={18} />
+          {isSeed && (
+            <span className="skills-tree-lock-badge" aria-label="Imutável">
+              <LockBadge />
+            </span>
+          )}
+        </span>
+        <span className="skills-tree-name skills-tree-name--mono">{displayName}</span>
+        {scripts.length > 1 && <span className="skills-tree-count">{scripts.length}</span>}
+      </button>
+      <AnimatePresence initial={false}>
+        {expanded && (
+          <motion.div
+            key="children"
+            className="skills-tree-children"
+            {...ANIM}
+            style={{ overflow: "hidden" }}
+          >
+            <div className="skills-tree-children-inner">
+              {scripts.map((s) => (
+                <ScriptLeaf
+                  key={`script/${s.slug}`}
+                  script={s}
+                  selected={selected}
+                  isSeed={isSeed}
+                  onSelect={onSelect}
+                />
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+/* Folha clicável de script (.py) */
+function ScriptLeaf({
+  script,
+  selected,
+  isSeed,
+  onSelect,
+}: {
+  script: OpenCodeScript;
+  selected: Selected;
+  isSeed: boolean;
+  onSelect: (item: SelectableItem) => void;
+}) {
+  const isSelected = selected?.kind === "script" && selected?.slug === script.slug;
+  const sizeKb = script.size_bytes >= 1024 ? `${(script.size_bytes / 1024).toFixed(1)}kb` : `${script.size_bytes}b`;
+
+  return (
+    <button
+      type="button"
+      title={`${script.skill_slug}/${script.filename}  ·  ${sizeKb}`}
+      className={[
+        "skills-tree-row",
+        "skills-tree-row--file",
+        "skills-tree-row--nested",
+        isSelected && "skills-tree-row--selected",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      onClick={() =>
+        onSelect({
+          kind: "script",
+          slug: script.slug,
+          description: `${script.skill_slug}/${script.filename}`,
+        })
+      }
+      onMouseMove={(e) => {
+        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        e.currentTarget.style.setProperty("--mx", `${e.clientX - rect.left}px`);
+        e.currentTarget.style.setProperty("--my", `${e.clientY - rect.top}px`);
+      }}
+    >
+      <span className="skills-tree-chevron skills-tree-chevron--spacer" aria-hidden="true" />
+      <span className="skills-tree-icon">
+        <FilePythonIcon size={16} glow={isSelected} />
+        {isSeed && (
+          <span className="skills-tree-lock-badge" aria-label="Imutável">
+            <LockBadge />
+          </span>
+        )}
+      </span>
+      <span className="skills-tree-name skills-tree-name--mono">{script.filename}</span>
+    </button>
   );
 }
 

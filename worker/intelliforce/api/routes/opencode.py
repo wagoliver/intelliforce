@@ -19,6 +19,7 @@ from intelliforce.api.deps import get_current_user
 from intelliforce.api.schemas.opencode import (
     OpenCodeContent,
     OpenCodeFile,
+    OpenCodeScript,
     OpenCodeTree,
 )
 from intelliforce.db.models.user import User
@@ -129,6 +130,51 @@ def _safe_slug(slug: str) -> str:
     return slug
 
 
+def _safe_filename(filename: str) -> str:
+    """Validação anti-traversal pra nome de arquivo: [a-zA-Z0-9._-] com 1 ponto pra extensão."""
+    if not filename or len(filename) > 128:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Filename inválido")
+    if not all(c.isalnum() or c in "._-" for c in filename):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Filename inválido")
+    if filename.startswith(".") or "/" in filename or ".." in filename:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Filename inválido")
+    return filename
+
+
+def _read_scripts(root: Path) -> list[OpenCodeScript]:
+    """Enumera todos os scripts de todas as skills (pattern: <skill>/scripts/*.py).
+
+    Por enquanto só listamos .py — extensões adicionais (sh, ts, etc) entram
+    aqui se virarem padrão.
+    """
+    skills_dir = root / "skills"
+    if not skills_dir.is_dir():
+        return []
+    out: list[OpenCodeScript] = []
+    for skill_entry in sorted(skills_dir.iterdir()):
+        if not skill_entry.is_dir():
+            continue
+        scripts_dir = skill_entry / "scripts"
+        if not scripts_dir.is_dir():
+            continue
+        for script in sorted(scripts_dir.iterdir()):
+            if not script.is_file() or script.suffix.lower() != ".py":
+                continue
+            try:
+                size = script.stat().st_size
+            except OSError:
+                size = 0
+            out.append(
+                OpenCodeScript(
+                    skill_slug=skill_entry.name,
+                    filename=script.name,
+                    slug=f"{skill_entry.name}/{script.name}",
+                    size_bytes=size,
+                )
+            )
+    return out
+
+
 def _resolve_safely(base: Path, target: Path) -> Path:
     """Garante que target está dentro de base (anti path-traversal)."""
     base_r = base.resolve()
@@ -144,12 +190,13 @@ def _resolve_safely(base: Path, target: Path) -> Path:
 async def get_tree(
     user: User = Depends(get_current_user),
 ) -> OpenCodeTree:
-    """Lista todos os skills, agents e commands declarados no filesystem."""
+    """Lista todos os skills, agents, commands e scripts declarados no filesystem."""
     root = _opencode_root()
     return OpenCodeTree(
         skills=_read_skills(root),
         agents=_read_md_dir(root, "agent", "agents"),
         commands=_read_md_dir(root, "command", "commands"),
+        scripts=_read_scripts(root),
     )
 
 
@@ -199,3 +246,30 @@ async def get_command(
     raw = target.read_text(encoding="utf-8")
     fm, body = _parse_frontmatter(raw)
     return OpenCodeContent(kind="command", slug=slug, raw=raw, frontmatter=fm, body=body)
+
+
+@router.get("/scripts/{skill_slug}/{filename}", response_model=OpenCodeContent)
+async def get_script(
+    skill_slug: str,
+    filename: str,
+    user: User = Depends(get_current_user),
+) -> OpenCodeContent:
+    """Retorna conteúdo cru de um script Python de uma skill (read-only)."""
+    skill_slug = _safe_slug(skill_slug)
+    filename = _safe_filename(filename)
+    if not filename.endswith(".py"):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Apenas .py suportado")
+    root = _opencode_root()
+    target = root / "skills" / skill_slug / "scripts" / filename
+    target = _resolve_safely(root, target)
+    if not target.is_file():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Script não encontrado")
+    raw = target.read_text(encoding="utf-8")
+    # Sem frontmatter; body = raw, pra UI mostrar como bloco de código.
+    return OpenCodeContent(
+        kind="script",
+        slug=f"{skill_slug}/{filename}",
+        raw=raw,
+        frontmatter={},
+        body=raw,
+    )

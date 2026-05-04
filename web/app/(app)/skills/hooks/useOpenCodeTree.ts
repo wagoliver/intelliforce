@@ -9,10 +9,19 @@ export type OpenCodeFile = {
   description: string | null;
 };
 
+export type OpenCodeScript = {
+  kind: "script";
+  skill_slug: string;
+  filename: string;
+  slug: string;          // composto "<skill>/<filename>"
+  size_bytes: number;
+};
+
 export type OpenCodeTree = {
   skills: OpenCodeFile[];
   agents: OpenCodeFile[];
   commands: OpenCodeFile[];
+  scripts: OpenCodeScript[];
 };
 
 export type OpenCodeContent = {
@@ -23,7 +32,7 @@ export type OpenCodeContent = {
   body: string;
 };
 
-const EMPTY_TREE: OpenCodeTree = { skills: [], agents: [], commands: [] };
+const EMPTY_TREE: OpenCodeTree = { skills: [], agents: [], commands: [], scripts: [] };
 
 export function useOpenCodeTree() {
   const [tree, setTree] = useState<OpenCodeTree>(EMPTY_TREE);
@@ -55,13 +64,22 @@ export function useOpenCodeTree() {
 }
 
 export async function fetchOpenCodeContent(
-  kind: "skill" | "agent" | "command",
+  kind: "skill" | "agent" | "command" | "script",
   slug: string,
 ): Promise<OpenCodeContent> {
-  const path = kind === "skill" ? "skills" : kind === "agent" ? "agents" : "commands";
-  const res = await fetch(`/api/proxy/opencode/${path}/${encodeURIComponent(slug)}`, {
-    cache: "no-store",
-  });
+  let url: string;
+  if (kind === "script") {
+    // slug pra script vem como "<skill>/<filename>" — encodeURI dos dois lados separadamente
+    const sepIdx = slug.indexOf("/");
+    if (sepIdx === -1) throw new Error("Script slug malformado");
+    const skillSlug = encodeURIComponent(slug.slice(0, sepIdx));
+    const filename = encodeURIComponent(slug.slice(sepIdx + 1));
+    url = `/api/proxy/opencode/scripts/${skillSlug}/${filename}`;
+  } else {
+    const path = kind === "skill" ? "skills" : kind === "agent" ? "agents" : "commands";
+    url = `/api/proxy/opencode/${path}/${encodeURIComponent(slug)}`;
+  }
+  const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) {
     throw new Error(`HTTP ${res.status}`);
   }

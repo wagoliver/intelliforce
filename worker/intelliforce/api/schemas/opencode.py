@@ -13,10 +13,20 @@ class OpenCodeFile(BaseModel):
     description: str | None = None  # do frontmatter
 
 
+class OpenCodeScript(BaseModel):
+    """Script auxiliar de uma skill — geralmente Python em <skill>/scripts/."""
+    kind: str = "script"
+    skill_slug: str                  # skill dona (ex.: "intelliforce-vault")
+    filename: str                    # nome do arquivo (ex.: "vault.py")
+    slug: str                        # composto "<skill_slug>/<filename>" pra navegar/selecionar
+    size_bytes: int                  # útil pro user antever escala
+
+
 class OpenCodeTree(BaseModel):
     skills: list[OpenCodeFile]
     agents: list[OpenCodeFile]
     commands: list[OpenCodeFile]
+    scripts: list[OpenCodeScript] = []
 
 
 class OpenCodeContent(BaseModel):

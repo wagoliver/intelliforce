@@ -8,7 +8,7 @@ import { useReducedMotion } from "../hooks/useReducedMotion";
 import { MarkdownView } from "./MarkdownView";
 
 type Props = {
-  selected: { kind: OpenCodeFile["kind"]; slug: string } | null;
+  selected: { kind: OpenCodeFile["kind"] | "script"; slug: string } | null;
   onClose: () => void;
 };
 
@@ -126,7 +126,15 @@ export function SkillDrawer({ selected, onClose }: Props) {
                   </section>
                 )}
                 {content.body ? (
-                  <MarkdownView source={content.body} variant="drawer" />
+                  selected.kind === "script" ? (
+                    // Renderiza como bloco de código Python — reusa MarkdownView com fence
+                    <MarkdownView
+                      source={"```python\n" + content.body + "\n```"}
+                      variant="drawer"
+                    />
+                  ) : (
+                    <MarkdownView source={content.body} variant="drawer" />
+                  )
                 ) : (
                   <div className="skills-drawer-loading">(corpo vazio)</div>
                 )}

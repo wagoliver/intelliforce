@@ -66,39 +66,34 @@ if [ -d "$SOURCE_DIR" ]; then
     SEED_DIR=/opencode-seed
     TARGET_OPENCODE="$SOURCE_DIR/.opencode"
 
+    # Lista de seeds (path relativo a $SEED_DIR e $TARGET_OPENCODE).
+    # File ou diretório, ambos suportados. Adicionar novos seeds = nova linha aqui
+    # E nova linha no Dockerfile.worker (COPY).
+    SEEDS=(
+        "agents/builder.md"
+        "agents/operator.md"
+        "skills/karpathy-guidelines"
+        "skills/intelliforce-api"
+        "skills/intelliforce-discover"
+    )
+
     if [ -d "$SEED_DIR" ] && [ -d "$TARGET_OPENCODE" ]; then
         echo "[entrypoint] Aplicando system seeds (imutáveis)..."
-
-        # Agente builder
-        if [ -f "$SEED_DIR/agents/builder.md" ]; then
-            mkdir -p "$TARGET_OPENCODE/agents"
-            cp -f "$SEED_DIR/agents/builder.md" "$TARGET_OPENCODE/agents/builder.md"
-            echo "[entrypoint]   ✓ agents/builder.md"
-        fi
-
-        # Agente operator (Refinement 2 — opera o IntelliForce via API)
-        if [ -f "$SEED_DIR/agents/operator.md" ]; then
-            mkdir -p "$TARGET_OPENCODE/agents"
-            cp -f "$SEED_DIR/agents/operator.md" "$TARGET_OPENCODE/agents/operator.md"
-            echo "[entrypoint]   ✓ agents/operator.md"
-        fi
-
-        # Skill karpathy-guidelines
-        if [ -f "$SEED_DIR/skills/karpathy-guidelines/SKILL.md" ]; then
-            mkdir -p "$TARGET_OPENCODE/skills/karpathy-guidelines"
-            cp -f "$SEED_DIR/skills/karpathy-guidelines/SKILL.md" \
-                "$TARGET_OPENCODE/skills/karpathy-guidelines/SKILL.md"
-            echo "[entrypoint]   ✓ skills/karpathy-guidelines/SKILL.md"
-        fi
-
-        # Skill intelliforce-api (fundação das skills do operator) — pasta inteira
-        # porque inclui scripts/auth_check.py
-        if [ -d "$SEED_DIR/skills/intelliforce-api" ]; then
-            mkdir -p "$TARGET_OPENCODE/skills/intelliforce-api"
-            cp -rf "$SEED_DIR/skills/intelliforce-api/." \
-                "$TARGET_OPENCODE/skills/intelliforce-api/"
-            echo "[entrypoint]   ✓ skills/intelliforce-api/ (com scripts)"
-        fi
+        for seed in "${SEEDS[@]}"; do
+            src="$SEED_DIR/$seed"
+            dst="$TARGET_OPENCODE/$seed"
+            if [ -d "$src" ]; then
+                mkdir -p "$dst"
+                cp -rf "$src/." "$dst/"
+                echo "[entrypoint]   ✓ $seed/ (recursive)"
+            elif [ -f "$src" ]; then
+                mkdir -p "$(dirname "$dst")"
+                cp -f "$src" "$dst"
+                echo "[entrypoint]   ✓ $seed"
+            else
+                echo "[entrypoint]   ⚠ seed ausente no SEED_DIR: $seed"
+            fi
+        done
     else
         echo "[entrypoint] AVISO: seeds não aplicados (SEED_DIR=$SEED_DIR, TARGET=$TARGET_OPENCODE)"
     fi

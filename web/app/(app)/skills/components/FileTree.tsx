@@ -26,6 +26,7 @@ const SEED_KEYS = new Set<string>([
   "agent/operator",
   "skill/karpathy-guidelines",
   "skill/intelliforce-api",
+  "skill/intelliforce-discover",
 ]);
 
 type Selected = { kind: OpenCodeFile["kind"]; slug: string } | null;

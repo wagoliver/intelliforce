@@ -66,6 +66,7 @@ COPY opencode/.opencode/agents/builder.md /opencode-seed/agents/builder.md
 COPY opencode/.opencode/agents/operator.md /opencode-seed/agents/operator.md
 COPY opencode/.opencode/skills/karpathy-guidelines/SKILL.md /opencode-seed/skills/karpathy-guidelines/SKILL.md
 COPY opencode/.opencode/skills/intelliforce-api /opencode-seed/skills/intelliforce-api
+COPY opencode/.opencode/skills/intelliforce-discover /opencode-seed/skills/intelliforce-discover
 
 # -----------------------------------------------------------------------------
 # Healthcheck e entrypoint

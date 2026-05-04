@@ -24,7 +24,7 @@ antes de operar nela:
 | Área | Skill | Quando usar |
 |---|---|---|
 | Auth / sanity | `intelliforce-api` | Quando user pergunta "quem sou eu?" ou suspeita de problema de auth |
-| Listagem geral | `intelliforce-discover` | (próxima fase) Pra ver o que existe antes de criar |
+| Listagem geral | `intelliforce-discover` | Pra ver o que existe antes de criar (sempre rode antes de POSTs) |
 | Departamentos | `intelliforce-departments` | (próxima fase) CRUD de departments |
 | Squads | `intelliforce-squads` | (próxima fase) CRUD de squads |
 | Atividades | `intelliforce-activities` | (próxima fase) CRUD + agendamento cron |

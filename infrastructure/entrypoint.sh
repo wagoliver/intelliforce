@@ -75,6 +75,9 @@ if [ -d "$SOURCE_DIR" ]; then
         "skills/karpathy-guidelines"
         "skills/intelliforce-api"
         "skills/intelliforce-discover"
+        "skills/intelliforce-departments"
+        "skills/intelliforce-squads"
+        "skills/intelliforce-activities"
     )
 
     if [ -d "$SEED_DIR" ] && [ -d "$TARGET_OPENCODE" ]; then

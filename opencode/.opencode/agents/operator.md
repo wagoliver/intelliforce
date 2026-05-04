@@ -25,9 +25,9 @@ antes de operar nela:
 |---|---|---|
 | Auth / sanity | `intelliforce-api` | Quando user pergunta "quem sou eu?" ou suspeita de problema de auth |
 | Listagem geral | `intelliforce-discover` | Pra ver o que existe antes de criar (sempre rode antes de POSTs) |
-| Departamentos | `intelliforce-departments` | (próxima fase) CRUD de departments |
-| Squads | `intelliforce-squads` | (próxima fase) CRUD de squads |
-| Atividades | `intelliforce-activities` | (próxima fase) CRUD + agendamento cron |
+| Departamentos | `intelliforce-departments` | CRUD de departments (top-level org unit) |
+| Squads | `intelliforce-squads` | CRUD de squads dentro de um departamento |
+| Atividades | `intelliforce-activities` | CRUD de activities + agendamento cron |
 | Digital employees | `intelliforce-agents` | (próxima fase) CRUD de definição de agente |
 | Instâncias / scale | `intelliforce-instances` | (próxima fase) Contratar/demitir agentes pra activity |
 | Tarefas | `intelliforce-tasks` | (próxima fase) Disparar e listar tasks |

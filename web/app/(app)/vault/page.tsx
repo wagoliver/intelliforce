@@ -124,8 +124,20 @@ export default function VaultPage() {
                   <LockIcon size={16} />
                 </span>
                 <code className="vault-card-slug">{s.slug}</code>
+                <span className="vault-card-fieldcount" title={t("field_count_tooltip")}>
+                  {s.field_keys.length === 1
+                    ? t("field_count_one")
+                    : t("field_count_n", { n: s.field_keys.length })}
+                </span>
               </div>
               {s.description && <p className="vault-card-desc">{s.description}</p>}
+              {s.field_keys.length > 0 && (
+                <div className="vault-card-fieldkeys">
+                  {s.field_keys.map((k) => (
+                    <code key={k} className="vault-card-fieldkey">{k}</code>
+                  ))}
+                </div>
+              )}
               {s.tags.length > 0 && (
                 <div className="vault-card-tags">
                   {s.tags.map((tag) => (

@@ -62,8 +62,12 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+# Diretórios "lib/" usados por Python venv/build artifacts (lib/, lib64/).
+# NÃO confundir com web/lib (TypeScript helpers do frontend) — usa caminho
+# absoluto a partir da raiz pra restringir.
+/lib/
+/lib64/
+**/python-lib/
 parts/
 sdist/
 var/

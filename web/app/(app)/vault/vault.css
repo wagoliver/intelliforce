@@ -248,6 +248,38 @@
   font-weight: 600;
   color: var(--text);
   word-break: break-all;
+  flex: 1;
+}
+
+.vault-card-fieldcount {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-green);
+  border: 1px solid color-mix(in oklab, var(--accent-green) 30%, transparent);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.vault-card-fieldkeys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.vault-card-fieldkey {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
 }
 
 .vault-card-desc {
@@ -458,6 +490,185 @@
 .vault-input-toggle:hover {
   background: var(--bg-hover);
   color: var(--text);
+}
+
+/* ============================================================================
+ * Multi-field create dialog — lista de pares key + value
+ * ============================================================================ */
+
+.vault-fields-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.vault-fields-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.vault-fields-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.vault-field-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(180px, 2fr) auto;
+  gap: 6px;
+  align-items: stretch;
+}
+
+.vault-field-key-input {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 12.5px;
+}
+
+.vault-field-value-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.vault-field-remove {
+  width: 32px;
+  height: 36px;
+  display: inline-grid;
+  place-items: center;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-subtle);
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease, background 120ms ease;
+  flex-shrink: 0;
+}
+.vault-field-remove:hover:not(:disabled) {
+  background: var(--danger-soft);
+  border-color: color-mix(in oklab, var(--danger) 35%, transparent);
+  color: var(--danger);
+}
+.vault-field-remove:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.vault-fields-add {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px dashed color-mix(in oklab, var(--accent-green) 40%, var(--border));
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--accent-green);
+  cursor: pointer;
+  transition: background 120ms ease, border-style 120ms ease;
+}
+.vault-fields-add:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-style: solid;
+}
+.vault-fields-add:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ============================================================================
+ * Reveal modal — multi-field listing
+ * ============================================================================ */
+
+.vault-reveal-keys-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  padding: 8px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-top: 4px;
+}
+.vault-reveal-keys-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-right: 4px;
+}
+.vault-reveal-key-chip {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.vault-reveal-fields-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.vault-reveal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  background: linear-gradient(135deg,
+    color-mix(in oklab, var(--accent-green) 6%, var(--bg)),
+    color-mix(in oklab, var(--accent-cyan) 6%, var(--bg)));
+  border: 1px solid color-mix(in oklab, var(--accent-cyan) 25%, var(--border));
+  border-radius: 8px;
+}
+
+.vault-reveal-field-key {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent-cyan);
+  text-transform: lowercase;
+}
+
+.vault-reveal-field-value-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.vault-reveal-field-value {
+  flex: 1;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 13px;
+  color: var(--text);
+  word-break: break-all;
+  user-select: all;
+  padding: 4px 0;
+  min-width: 0;
+}
+.vault-reveal-field-value.is-masked {
+  letter-spacing: 0.1em;
+  color: var(--text-subtle);
+  user-select: none;
+}
+
+.vault-reveal-field-toggle,
+.vault-reveal-field-copy {
+  font-size: 11px;
+  padding: 5px 10px;
+  flex-shrink: 0;
 }
 
 /* ============================================================================

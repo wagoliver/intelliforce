@@ -1,24 +1,26 @@
 #!/usr/bin/env python3
-"""teams.py — Microsoft Teams via Graph API (app-only).
+"""teams.py — Microsoft Teams via Power Automate webhook (one-way).
 
-Lê credenciais do Vault (slug 'microsoft-teams' com fields client_id,
-client_secret, tenant_id), obtém access_token via client credentials flow
-e suporta:
+Manda mensagem em channel do Teams disparando um flow do Power Automate
+que recebe um Adaptive Card no body e posta no channel-alvo. URL do
+trigger fica criptografada no Vault — slug default `teams-webhook-digital-employee`
+com campo único `url`.
 
-  send            — manda mensagem em channel
-  listen          — polla até mensagem nova (ou timeout)
-  list-teams      — descobre team_ids da org
-  list-channels   — descobre channel_ids dentro de um team
-  resolve         — resolve nome ↔ ID de team/channel
+Suporta:
+  send       — mensagem texto simples (monta Adaptive Card mínimo)
+  send-card  — Adaptive Card customizado (de arquivo, inline JSON ou stdin)
 
-Convenções de output:
-  - stdout: JSON pretty-printed (parsable pelo operator)
-  - stderr: erros categóricos (TOKEN_EMPTY, AUTH_ERROR_<n>, etc.)
-  - exit:   0 sucesso, 1 erro recuperável, 2 erro de uso, 3 timeout em listen
+Limitações conhecidas:
+  - One-way: não recebe respostas (use Graph API + RSC pra listen)
+  - 1 webhook por channel: pra postar em outro channel, criar outro flow
+    no Power Automate e cadastrar como secret separado.
 
-Limitações conhecidas (app-only auth):
-  - DM 1:1 NÃO suportado (requer Bot Framework ou delegated auth)
-  - Mention de pessoa funciona só dentro de message em channel/chat
+Por que webhook em vez de Graph API:
+  Graph API exige RSC (Resource-Specific Consent) pra postar em channel,
+  o que requer Teams App package + admin consent + install no team. Em
+  tenants com policy restritiva (caso da Arctica), isso fica bloqueado
+  por "Permissions needed". Webhook contorna 100% dessa cadeia — só
+  precisa criar o flow uma vez e a URL no Vault.
 """
 from __future__ import annotations
 
@@ -26,27 +28,25 @@ import argparse
 import json
 import subprocess
 import sys
-import time
 from datetime import datetime, timezone
+from pathlib import Path
 
 import httpx
 
 VAULT_SCRIPT = "/opencode-runtime/.opencode/skills/intelliforce-vault/scripts/vault.py"
-VAULT_SLUG = "microsoft-teams"
-GRAPH_BASE = "https://graph.microsoft.com/v1.0"
-TOKEN_URL = "https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
+DEFAULT_WEBHOOK_SLUG = "teams-webhook-digital-employee"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Vault + auth
+# Vault
 # ─────────────────────────────────────────────────────────────────────────────
-def _get_credentials(skill_slug: str) -> dict[str, str]:
-    """Busca client_id/client_secret/tenant_id do Vault (1 chamada, all-fields)."""
+def _get_webhook_url(secret_slug: str, skill_slug: str) -> str:
+    """Lê o campo `url` do secret <slug> no Vault."""
     result = subprocess.run(
         [
-            "python", VAULT_SCRIPT, "get", VAULT_SLUG,
+            "python", VAULT_SCRIPT, "get", secret_slug,
             "--skill", skill_slug,
-            "--all-fields",
+            "--field", "url",
         ],
         capture_output=True, text=True, timeout=20,
     )
@@ -54,401 +54,231 @@ def _get_credentials(skill_slug: str) -> dict[str, str]:
         err = result.stderr.strip()
         if "SECRET_NOT_FOUND" in err:
             print(
-                f"VAULT_MISSING: cadastre o secret '{VAULT_SLUG}' em /vault "
-                "com os campos client_id, client_secret, tenant_id",
+                f"VAULT_MISSING: cadastre o secret '{secret_slug}' em /vault "
+                "com o campo `url` (URL do trigger HTTP do Power Automate flow).",
+                file=sys.stderr,
+            )
+        elif "API_ERROR_404" in err and "Campo" in err:
+            print(
+                f"VAULT_FIELD_MISSING: o secret '{secret_slug}' existe mas não "
+                "tem campo `url`. Recadastre.",
                 file=sys.stderr,
             )
         else:
             print(f"VAULT_ERROR: {err}", file=sys.stderr)
         sys.exit(1)
-
-    try:
-        creds = json.loads(result.stdout)
-    except json.JSONDecodeError:
-        print("VAULT_INVALID_JSON", file=sys.stderr)
+    url = result.stdout.strip()
+    if not url:
+        print(f"VAULT_FIELD_EMPTY: secret '{secret_slug}' campo `url` vazio", file=sys.stderr)
         sys.exit(1)
-
-    required = {"client_id", "client_secret", "tenant_id"}
-    missing = required - set(creds.keys())
-    if missing:
-        print(
-            f"VAULT_MISSING_FIELDS: secret '{VAULT_SLUG}' está sem "
-            f"{', '.join(sorted(missing))}",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-    return creds
-
-
-def _get_access_token(creds: dict[str, str]) -> str:
-    """Client credentials flow → access_token (~60min TTL)."""
-    url = TOKEN_URL.format(tenant_id=creds["tenant_id"])
-    data = {
-        "grant_type": "client_credentials",
-        "client_id": creds["client_id"],
-        "client_secret": creds["client_secret"],
-        "scope": "https://graph.microsoft.com/.default",
-    }
-    try:
-        r = httpx.post(url, data=data, timeout=15.0)
-    except httpx.RequestError as e:
-        print(f"NETWORK_ERROR: {e}", file=sys.stderr)
-        sys.exit(1)
-    if r.status_code != 200:
-        # Erro típico: invalid_client (secret expirado), AADSTS70011 (scope inválido)
-        try:
-            err_body = r.json()
-            err_code = err_body.get("error", "unknown")
-            err_desc = err_body.get("error_description", "")[:300]
-            print(f"AUTH_ERROR_{r.status_code}: {err_code} — {err_desc}", file=sys.stderr)
-        except Exception:
-            print(f"AUTH_ERROR_{r.status_code}: {r.text[:300]}", file=sys.stderr)
-        sys.exit(1)
-    return r.json()["access_token"]
+    return url
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Graph wrapper
+# Adaptive Card builder (mensagem simples)
 # ─────────────────────────────────────────────────────────────────────────────
-def _graph(
-    method: str,
-    path: str,
-    token: str,
+def _build_simple_card(
     *,
-    json_body=None,
-    params=None,
-    timeout: float = 20.0,
-):
-    """Chamada Graph com tratamento padronizado de erros."""
-    url = f"{GRAPH_BASE}{path}"
-    headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
-    if json_body is not None:
-        headers["Content-Type"] = "application/json"
-    try:
-        r = httpx.request(
-            method, url, headers=headers, json=json_body, params=params, timeout=timeout
-        )
-    except httpx.RequestError as e:
-        print(f"NETWORK_ERROR: {e}", file=sys.stderr)
-        sys.exit(1)
+    message: str,
+    subject: str | None = None,
+    footer: str | None = None,
+) -> dict:
+    """Monta Adaptive Card mínimo a partir de texto.
 
-    if r.status_code == 401:
-        print("TOKEN_REJECTED: access_token inválido ou expirado", file=sys.stderr)
-        sys.exit(1)
-    if r.status_code == 403:
-        try:
-            err_body = r.json().get("error", {})
-            msg = err_body.get("message", r.text[:300])
-            code = err_body.get("code", "")
-            print(f"PERMISSION_DENIED ({code}): {msg}", file=sys.stderr)
-        except Exception:
-            print(f"PERMISSION_DENIED: {r.text[:300]}", file=sys.stderr)
+    Layout:
+      [Subject (bold, medium)]   ← se passado
+      [Message body (wrap)]
+      [Footer (subtle, small)]   ← timestamp + identificação
+    """
+    body: list[dict] = []
+    if subject:
+        body.append({
+            "type": "TextBlock",
+            "text": subject,
+            "weight": "bolder",
+            "size": "medium",
+            "wrap": True,
+        })
+    body.append({
+        "type": "TextBlock",
+        "text": message,
+        "wrap": True,
+    })
+    auto_footer = footer or (
+        "via IntelliForce · "
+        + datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    )
+    body.append({
+        "type": "TextBlock",
+        "text": auto_footer,
+        "size": "small",
+        "isSubtle": True,
+        "spacing": "small",
+        "wrap": True,
+    })
+
+    return {
+        "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+        "type": "AdaptiveCard",
+        "version": "1.4",
+        "body": body,
+    }
+
+
+def _load_card(args: argparse.Namespace) -> dict:
+    """Carrega Adaptive Card de --card-file, --card-json ou stdin."""
+    if args.card_file:
+        path = Path(args.card_file)
+        if not path.is_file():
+            print(f"CARD_FILE_NOT_FOUND: {path}", file=sys.stderr)
+            sys.exit(2)
+        raw = path.read_text(encoding="utf-8")
+    elif args.card_json:
+        raw = args.card_json
+    elif not sys.stdin.isatty():
+        raw = sys.stdin.read()
+    else:
         print(
-            "→ Verifique se o app tem permissions Application no Azure AD "
-            "(ChannelMessage.Send.Group, ChannelMessage.Read.Group, etc.) "
-            "e se admin consent foi concedido.",
+            "CARD_INPUT_MISSING: passe --card-file <path>, --card-json '<json>', "
+            "ou pipe via stdin.",
             file=sys.stderr,
         )
-        sys.exit(1)
-    if r.status_code == 404:
-        try:
-            msg = r.json().get("error", {}).get("message", r.text[:200])
-        except Exception:
-            msg = r.text[:200]
-        print(f"NOT_FOUND: {msg}", file=sys.stderr)
-        sys.exit(1)
-    if r.status_code >= 400:
-        try:
-            msg = r.json().get("error", {}).get("message", r.text[:300])
-        except Exception:
-            msg = r.text[:300]
-        print(f"API_ERROR_{r.status_code}: {msg}", file=sys.stderr)
-        sys.exit(1)
+        sys.exit(2)
 
-    if r.status_code == 204 or not r.content:
-        return None
     try:
-        return r.json()
-    except json.JSONDecodeError:
-        return {"raw": r.text}
+        card = json.loads(raw)
+    except json.JSONDecodeError as e:
+        print(f"CARD_INVALID_JSON: {e}", file=sys.stderr)
+        sys.exit(2)
+
+    # Algumas pessoas mandam {contentType, content}. Desempacota.
+    if isinstance(card, dict) and "content" in card and "contentType" in card:
+        card = card["content"]
+
+    if not isinstance(card, dict) or card.get("type") != "AdaptiveCard":
+        print(
+            "CARD_INVALID_SHAPE: a raiz do JSON precisa ter `type: \"AdaptiveCard\"`. "
+            "Não use o wrapper {contentType, content} — manda o card direto.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    return card
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Resolvers (nome → ID)
+# HTTP
 # ─────────────────────────────────────────────────────────────────────────────
-def _resolve_team_id(token: str, name_or_id: str) -> str:
-    """Aceita UUID ou nome. Se UUID, retorna direto. Se nome, busca via /teams."""
-    if _looks_like_uuid(name_or_id):
-        return name_or_id
-    # /teams (Team.ReadBasic.All) — endpoint específico de Teams.
-    # Evita /groups que exigiria Group.Read.All adicional.
-    data = _graph(
-        "GET", "/teams", token,
-        params={"$top": 100, "$select": "id,displayName"},
-    )
-    for t in (data or {}).get("value", []):
-        if t.get("displayName", "").strip().lower() == name_or_id.strip().lower():
-            return t["id"]
-    available = [t.get("displayName") for t in (data or {}).get("value", [])]
-    print(
-        f"TEAM_NOT_FOUND: '{name_or_id}'. Disponíveis: {available}",
-        file=sys.stderr,
-    )
-    sys.exit(1)
+def _post_to_webhook(url: str, card: dict) -> int:
+    try:
+        r = httpx.post(url, json=card, timeout=20.0)
+    except httpx.RequestError as e:
+        print(f"NETWORK_ERROR: {e}", file=sys.stderr)
+        return 1
 
+    # Power Automate retorna 202 Accepted em sucesso (processa async)
+    if r.status_code in (200, 202, 204):
+        out = {
+            "ok": True,
+            "status": r.status_code,
+            "sent_at": datetime.now(timezone.utc).isoformat(),
+        }
+        print(json.dumps(out, ensure_ascii=False))
+        return 0
 
-def _resolve_channel_id(token: str, team_id: str, name_or_id: str) -> str:
-    if name_or_id.startswith("19:"):
-        return name_or_id  # já é channel ID no formato Graph
-    data = _graph("GET", f"/teams/{team_id}/channels", token)
-    for c in (data or {}).get("value", []):
-        if c.get("displayName", "").strip().lower() == name_or_id.strip().lower():
-            return c["id"]
-    available = [c.get("displayName") for c in (data or {}).get("value", [])]
-    print(
-        f"CHANNEL_NOT_FOUND: '{name_or_id}' no team. Disponíveis: {available}",
-        file=sys.stderr,
-    )
-    sys.exit(1)
-
-
-def _looks_like_uuid(s: str) -> bool:
-    return len(s) == 36 and s.count("-") == 4
+    # Erros: corpo geralmente tem detalhe
+    body_preview = r.text[:400] if r.text else "(empty body)"
+    if r.status_code == 401 or r.status_code == 403:
+        print(
+            f"WEBHOOK_UNAUTHORIZED ({r.status_code}): a URL do webhook está "
+            "inválida ou expirada. Re-gere a URL no Power Automate e atualize "
+            f"o Vault. Detalhe: {body_preview}",
+            file=sys.stderr,
+        )
+        return 1
+    if r.status_code == 404:
+        print(
+            f"WEBHOOK_NOT_FOUND (404): o flow do Power Automate foi deletado "
+            f"ou a URL está errada. Detalhe: {body_preview}",
+            file=sys.stderr,
+        )
+        return 1
+    if r.status_code == 400:
+        print(
+            f"WEBHOOK_BAD_REQUEST (400): o Power Automate rejeitou o body. "
+            f"Geralmente é shape do Adaptive Card inválido. Detalhe: {body_preview}",
+            file=sys.stderr,
+        )
+        return 1
+    print(f"WEBHOOK_ERROR_{r.status_code}: {body_preview}", file=sys.stderr)
+    return 1
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Comandos
 # ─────────────────────────────────────────────────────────────────────────────
 def cmd_send(args: argparse.Namespace) -> int:
-    creds = _get_credentials(args.skill)
-    token = _get_access_token(creds)
-
-    team_id = _resolve_team_id(token, args.team)
-    channel_id = _resolve_channel_id(token, team_id, args.channel)
-
-    content = args.message
-    mentions = []
-
-    if args.mention:
-        # Resolve UPN (e-mail) → user object pra construir mention HTML
-        user = _graph("GET", f"/users/{args.mention}", token)
-        if user:
-            mention_id = 0
-            display = user.get("displayName") or args.mention
-            content = f'<at id="{mention_id}">{display}</at> {content}'
-            mentions.append({
-                "id": mention_id,
-                "mentionText": display,
-                "mentioned": {
-                    "user": {
-                        "id": user["id"],
-                        "displayName": display,
-                        "userIdentityType": "aadUser",
-                    }
-                },
-            })
-
-    body: dict = {
-        "body": {
-            "content": content,
-            "contentType": "html" if (args.mention or args.html) else "text",
-        }
-    }
-    if mentions:
-        body["mentions"] = mentions
-    if args.subject:
-        body["subject"] = args.subject
-
-    result = _graph(
-        "POST",
-        f"/teams/{team_id}/channels/{channel_id}/messages",
-        token,
-        json_body=body,
+    url = _get_webhook_url(args.webhook_secret, args.skill)
+    card = _build_simple_card(
+        message=args.message,
+        subject=args.subject,
+        footer=args.footer,
     )
-    print(json.dumps({
-        "ok": True,
-        "id": (result or {}).get("id"),
-        "createdDateTime": (result or {}).get("createdDateTime"),
-        "webUrl": (result or {}).get("webUrl"),
-        "team_id": team_id,
-        "channel_id": channel_id,
-    }, indent=2, ensure_ascii=False))
-    return 0
+    return _post_to_webhook(url, card)
 
 
-def cmd_listen(args: argparse.Namespace) -> int:
-    """Polla mensagens novas até a 1ª aparecer ou timeout."""
-    creds = _get_credentials(args.skill)
-    token = _get_access_token(creds)
-
-    team_id = _resolve_team_id(token, args.team)
-    channel_id = _resolve_channel_id(token, team_id, args.channel)
-
-    if args.since:
-        since_dt = datetime.fromisoformat(args.since.replace("Z", "+00:00"))
-    else:
-        since_dt = datetime.now(timezone.utc)
-
-    deadline = time.monotonic() + args.timeout
-    seen_ids: set[str] = set()
-
-    while time.monotonic() < deadline:
-        data = _graph(
-            "GET",
-            f"/teams/{team_id}/channels/{channel_id}/messages",
-            token,
-            params={"$top": 20},
-        )
-        new_msgs = []
-        for msg in (data or {}).get("value", []):
-            mid = msg.get("id")
-            if not mid or mid in seen_ids:
-                continue
-            try:
-                created = datetime.fromisoformat(
-                    msg.get("createdDateTime", "").replace("Z", "+00:00")
-                )
-            except (ValueError, AttributeError):
-                continue
-            if created <= since_dt:
-                continue
-
-            # Filtra mensagens do próprio bot/app pra não auto-loopar
-            from_user = (msg.get("from") or {}).get("user") or {}
-            if args.exclude_self and from_user.get("id") == creds["client_id"]:
-                continue
-
-            seen_ids.add(mid)
-            new_msgs.append({
-                "id": mid,
-                "createdDateTime": msg.get("createdDateTime"),
-                "from": from_user.get("displayName"),
-                "from_id": from_user.get("id"),
-                "content": (msg.get("body") or {}).get("content", ""),
-                "contentType": (msg.get("body") or {}).get("contentType"),
-            })
-
-        if new_msgs:
-            # Ordena cronologicamente (Graph retorna desc por default)
-            new_msgs.sort(key=lambda m: m["createdDateTime"])
-            print(json.dumps(new_msgs, indent=2, ensure_ascii=False))
-            return 0
-
-        time.sleep(args.poll_interval)
-
-    print(json.dumps([], indent=2))
-    print(
-        f"TIMEOUT: nenhuma mensagem nova em {args.timeout}s",
-        file=sys.stderr,
-    )
-    return 3
-
-
-def cmd_list_teams(args: argparse.Namespace) -> int:
-    creds = _get_credentials(args.skill)
-    token = _get_access_token(creds)
-    # GET /teams requer Team.ReadBasic.All (Application). Mais barato que
-    # GET /groups com filter (que exigiria Group.Read.All).
-    data = _graph(
-        "GET", "/teams", token,
-        params={"$top": 100, "$select": "id,displayName,description"},
-    )
-    teams = [
-        {"id": t["id"], "name": t.get("displayName", ""), "description": t.get("description", "")}
-        for t in (data or {}).get("value", [])
-    ]
-    print(json.dumps(teams, indent=2, ensure_ascii=False))
-    return 0
-
-
-def cmd_list_channels(args: argparse.Namespace) -> int:
-    creds = _get_credentials(args.skill)
-    token = _get_access_token(creds)
-    team_id = _resolve_team_id(token, args.team)
-    data = _graph("GET", f"/teams/{team_id}/channels", token)
-    channels = [
-        {
-            "id": c["id"],
-            "name": c.get("displayName", ""),
-            "description": c.get("description", ""),
-            "membershipType": c.get("membershipType"),
-        }
-        for c in (data or {}).get("value", [])
-    ]
-    print(json.dumps(channels, indent=2, ensure_ascii=False))
-    return 0
-
-
-def cmd_resolve(args: argparse.Namespace) -> int:
-    """Resolve nome → IDs. Útil pra debug/setup."""
-    creds = _get_credentials(args.skill)
-    token = _get_access_token(creds)
-    team_id = _resolve_team_id(token, args.team)
-    out: dict = {"team_id": team_id}
-    if args.channel:
-        out["channel_id"] = _resolve_channel_id(token, team_id, args.channel)
-    print(json.dumps(out, indent=2, ensure_ascii=False))
-    return 0
+def cmd_send_card(args: argparse.Namespace) -> int:
+    url = _get_webhook_url(args.webhook_secret, args.skill)
+    card = _load_card(args)
+    return _post_to_webhook(url, card)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CLI
 # ─────────────────────────────────────────────────────────────────────────────
+def _add_common_args(p: argparse.ArgumentParser) -> None:
+    p.add_argument(
+        "--webhook-secret",
+        default=DEFAULT_WEBHOOK_SLUG,
+        help=f"Slug do secret no Vault com campo `url`. Default: {DEFAULT_WEBHOOK_SLUG}",
+    )
+    p.add_argument(
+        "--skill",
+        default="intelliforce-teams",
+        help="Slug da skill que está chamando (audit log do Vault). Default: intelliforce-teams",
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Microsoft Teams via Graph API (app-only).",
-        epilog="Cadastre o secret 'microsoft-teams' no Vault antes de usar.",
+        description="Microsoft Teams via Power Automate webhook (one-way).",
+        epilog=(
+            "Setup: criar flow no Power Automate com trigger "
+            "'When an HTTP request is received' + step "
+            "'Post card in a chat or channel'. Copiar URL do trigger e "
+            f"cadastrar no Vault no slug `{DEFAULT_WEBHOOK_SLUG}` "
+            "(campo `url`)."
+        ),
     )
     sub = parser.add_subparsers(dest="cmd", required=True)
 
-    # Argumento comum a todos: --skill (audit log do Vault)
-    def add_skill_arg(p):
-        p.add_argument(
-            "--skill", default="intelliforce-teams",
-            help="Slug da skill que está chamando (audit log). Default: intelliforce-teams.",
-        )
+    # send — mensagem texto simples (Adaptive Card mínimo gerado internamente)
+    p_send = sub.add_parser("send", help="Manda mensagem texto simples no channel.")
+    p_send.add_argument("--message", required=True, help="Texto principal da mensagem.")
+    p_send.add_argument("--subject", default=None, help="Título/assunto opcional (bold).")
+    p_send.add_argument("--footer", default=None, help="Footer custom (default: timestamp + IntelliForce).")
+    _add_common_args(p_send)
 
-    p_send = sub.add_parser("send", help="Manda mensagem em channel.")
-    p_send.add_argument("--team", required=True, help="Team ID (UUID) ou displayName")
-    p_send.add_argument("--channel", required=True, help="Channel ID ou displayName")
-    p_send.add_argument("--message", required=True, help="Texto da mensagem")
-    p_send.add_argument("--mention", default=None, help="UPN/e-mail da pessoa pra mencionar (notifica)")
-    p_send.add_argument("--subject", default=None, help="Assunto opcional (vira título)")
-    p_send.add_argument("--html", action="store_true", help="Trata --message como HTML")
-    add_skill_arg(p_send)
-
-    p_listen = sub.add_parser("listen", help="Polla até mensagem nova ou timeout.")
-    p_listen.add_argument("--team", required=True)
-    p_listen.add_argument("--channel", required=True)
-    p_listen.add_argument("--since", default=None, help="ISO 8601; default: agora")
-    p_listen.add_argument("--timeout", type=int, default=300, help="Segundos. Default 300.")
-    p_listen.add_argument("--poll-interval", type=int, default=15, help="Segundos. Default 15.")
-    p_listen.add_argument(
-        "--exclude-self", action="store_true",
-        help="Ignora mensagens enviadas pelo próprio app (evita auto-loop)",
+    # send-card — Adaptive Card customizado completo
+    p_card = sub.add_parser(
+        "send-card",
+        help="Manda Adaptive Card customizado (de arquivo, inline JSON, ou stdin).",
     )
-    add_skill_arg(p_listen)
-
-    p_list_teams = sub.add_parser("list-teams", help="Lista teams da org.")
-    add_skill_arg(p_list_teams)
-
-    p_list_channels = sub.add_parser("list-channels", help="Lista channels de um team.")
-    p_list_channels.add_argument("--team", required=True)
-    add_skill_arg(p_list_channels)
-
-    p_resolve = sub.add_parser("resolve", help="Resolve nomes → IDs.")
-    p_resolve.add_argument("--team", required=True)
-    p_resolve.add_argument("--channel", default=None)
-    add_skill_arg(p_resolve)
+    p_card.add_argument("--card-file", default=None, help="Path pra arquivo .json com o card.")
+    p_card.add_argument("--card-json", default=None, help="JSON inline (escape aspas).")
+    _add_common_args(p_card)
 
     args = parser.parse_args()
-    handlers = {
-        "send": cmd_send,
-        "listen": cmd_listen,
-        "list-teams": cmd_list_teams,
-        "list-channels": cmd_list_channels,
-        "resolve": cmd_resolve,
-    }
+    handlers = {"send": cmd_send, "send-card": cmd_send_card}
     return handlers[args.cmd](args)
 
 

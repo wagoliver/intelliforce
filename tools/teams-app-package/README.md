@@ -1,9 +1,19 @@
-# Teams App package — IntelliForce
+# Teams App package — IntelliForce (Graph API + RSC)
+
+> ⚠️ **Considere primeiro o caminho via Power Automate webhook.** A
+> skill `intelliforce-teams` (atual) usa webhook por padrão — não
+> precisa de Azure AD App, RSC, manifest, nem upload no Teams Admin
+> Center. Funciona em tenants com policy restritiva. Veja
+> `opencode/.opencode/skills/intelliforce-teams/SKILL.md`.
+>
+> Use este package APENAS se precisar de algo que webhook não
+> entrega: receber respostas (`listen`), listar teams/channels
+> dinamicamente, mention de pessoa com notificação real, ou postar
+> em chat 1:1.
 
 Gera o `.zip` de Microsoft Teams App customizado que dá ao
 `client_id` do Azure AD as **RSC permissions** necessárias pra postar
-em channels (`ChannelMessage.Send.Group` etc.). Sem isso, o `send`
-da skill `intelliforce-teams` retorna 403.
+em channels (`ChannelMessage.Send.Group` etc.) via **Graph API**.
 
 ## Quando usar
 

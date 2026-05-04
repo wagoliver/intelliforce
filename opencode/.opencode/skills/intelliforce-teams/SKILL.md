@@ -1,262 +1,244 @@
 ---
 name: intelliforce-teams
-description: "Envia e recebe mensagens no Microsoft Teams via Graph API (app-only auth). Manda em channels com mention opcional, polla respostas, descobre team/channel IDs. Credenciais ficam no Vault (slug microsoft-teams)."
+description: "Manda mensagens em channels do Microsoft Teams via Power Automate webhook (one-way). Suporta texto simples (Adaptive Card mínimo gerado automaticamente) ou cards customizados. URL do trigger fica criptografada no Vault. Sem necessidade de Azure AD App, Graph API ou RSC."
 license: MIT
 allowed-tools:
   - Bash(python /opencode-runtime/.opencode/skills/intelliforce-teams/scripts/teams.py *)
   - Read
 ---
 
-# IntelliForce Teams — mensagens no Microsoft Teams
+# IntelliForce Teams — notificações via Power Automate webhook
 
-Skill que se comunica com Microsoft Teams via Graph API usando autenticação
-**application** (sem usuário humano logado). Lê credenciais do Cofre, gera
-access_token via Azure AD e envia/recebe mensagens em channels.
+Skill que posta mensagens em channels do Microsoft Teams disparando um
+**flow do Power Automate** que recebe Adaptive Card e posta no
+channel-alvo. Substitui completamente o caminho Microsoft Graph API que
+exige Azure AD App + RSC + admin consent + install no team — coisa que
+muitos tenants corporativos bloqueiam por policy.
+
+## Como funciona
+
+```
+[skill X] ─┐
+           │ subprocess
+           ▼
+       [teams.py send]
+           │ lê URL do Vault (slug teams-webhook-*)
+           │
+           ▼
+       [POST https://...powerautomate.com/...]
+           │
+           ▼
+   [Power Automate flow]
+           │ "When HTTP request received" → "Post card in chat or channel"
+           ▼
+       [channel do Teams]
+```
+
+A URL do trigger HTTP do Power Automate carrega um SAS token (`sig=...`)
+que autentica a chamada — não precisa OAuth, não precisa Azure AD App.
+Trata-se do mesmo padrão dos antigos Incoming Webhooks, mas via Power
+Automate (Microsoft está deprecando os webhooks legados; Power Automate
+é o substituto oficial).
 
 ## Pré-requisitos
 
-### 1. Vault — secret `microsoft-teams` com 3 campos
+### 1. Power Automate flow (1 por channel)
 
-| Campo | De onde vem |
+Pra cada channel onde quiser postar, crie 1 flow:
+
+1. Abre **https://make.powerautomate.com**
+2. **Create** → **Instant cloud flow**
+3. Trigger: **When a HTTP request is received** (deixa o body schema vazio
+   ou genérico — o trigger aceita qualquer JSON)
+4. Add step: **Microsoft Teams** → **Post card in a chat or channel**
+   - **Post as**: User (ou Flow bot, se sua org permitir)
+   - **Post in**: Channel
+   - **Team**: selecione (ex.: *xOne - Notificações Sistêmicas*)
+   - **Channel**: selecione (ex.: *Digital Employee*)
+   - **Adaptive Card**: cole `triggerBody()` (expressão) — passa o body
+     do POST direto pro card
+5. Save
+6. Volta no trigger HTTP, copia a **URL** que aparece (formato:
+   `https://default<tenant>.environment.api.powerplatform.com/.../triggers/manual/paths/invoke?...&sig=...`)
+
+### 2. Cadastrar URL no Vault
+
+Na UI `/vault` → **Novo segredo**:
+
+| Slug | Campos |
 |---|---|
-| `client_id` | Application (client) ID do App Registration no Azure AD |
-| `client_secret` | Client Secret (Certificates & secrets) |
-| `tenant_id` | Directory (tenant) ID |
+| `teams-webhook-digital-employee` | `url` (campo único) |
 
-Cadastrar pela UI `/vault` → Novo segredo → slug `microsoft-teams` → 3
-campos. Tudo num único secret pra rotação atômica.
-
-### 2. Azure AD App Registration — permissions Application
-
-No Azure Portal → App Registration → API Permissions → Add →
-Microsoft Graph → **Application permissions** (não Delegated):
-
-| Permission | Pra quê |
-|---|---|
-| `Team.ReadBasic.All` | Listar teams (resolver nome → ID, listen, send) |
-| `Channel.ReadBasic.All` | Listar channels |
-| `ChannelMessage.Read.All` | Ler mensagens (pra `listen`) |
-| `User.Read.All` | Resolver UPN → user_id (pra mention) |
-
-Depois de adicionar: **Grant admin consent** (botão azul). Sem isso, todas
-as chamadas retornam 403.
-
-### 3. Teams App package — RSC pra `send` em channel
-
-⚠️ **CRÍTICO — leia antes de sugerir qualquer coisa ao user:**
-
-A permission **`ChannelMessage.Send.Group` NÃO existe** como Application
-permission no Azure Portal. Se você procurar em **Add a permission →
-Microsoft Graph → Application permissions**, ela **não vai aparecer**.
-Ela é **RSC-only** (Resource-Specific Consent), declarável apenas em
-**manifest de Teams App package**.
-
-**Não sugira ao user "vai no Azure e adiciona ChannelMessage.Send.Group"
-— isso é caça-fantasma, ela não está lá.** O caminho correto é:
-
-1. Gerar o package customizado em `tools/teams-app-package/`:
-   ```bash
-   cd tools/teams-app-package
-   python make-package.py --client-id <CLIENT_ID>
-   ```
-   (Output: `intelliforce-teams.zip`)
-2. Upload em **https://admin.teams.microsoft.com → Teams apps →
-   Manage apps → Upload new app**.
-3. Adicionar app no Team alvo: Teams desktop → Team → **Manage team →
-   Apps → More apps → IntelliForce → Add**.
-
-Sem esses 3 passos, `send` em channel sempre retornará 403, mesmo com
-admin consent dado pra todas as Application permissions disponíveis no
-portal.
-
-Detalhes em `tools/teams-app-package/README.md`.
-
-### Quando o user reportar `PERMISSION_DENIED` no `send`
-
-Sequência **obrigatória** de diagnóstico (não chute):
-
-1. `list-teams` funciona? Se não, o problema é Application permissions
-   (Team.ReadBasic.All) ou auth — direcione pro Azure Portal.
-2. `list-teams` funciona mas `send` não? Então o problema é RSC. Não
-   é coisa do Azure Portal — é o Teams App package. Direcione pro
-   `tools/teams-app-package/`.
-3. Se o user já uploadou o package e ainda dá 403: provavelmente o
-   app ainda não foi adicionado ao Team alvo (passo 3 acima). RSC é
-   por-Team, não por-tenant.
+Cole a URL no campo `url`. Pra outros channels: crie outro flow + outro
+secret com slug diferente (`teams-webhook-<nome-do-channel>`).
 
 ## Comandos
 
-### `send` — manda mensagem em channel
+### `send` — mensagem texto simples
 
 ```bash
 python .../teams.py send \
-    --team "<team_id|displayName>" \
-    --channel "<channel_id|displayName>" \
     --message "Texto da mensagem" \
-    [--mention <upn-da-pessoa>] \
     [--subject "Título"] \
-    [--html] \
+    [--footer "Footer custom"] \
+    [--webhook-secret <slug-no-vault>] \
     [--skill <slug-da-skill-que-chama>]
 ```
 
-Aceita **UUID ou nome** em `--team` e `--channel` (resolve via Graph).
-`--mention` recebe e-mail/UPN da pessoa — ela é notificada igual a um @ no
-chat. `--html` usa contentType=html (default é text). `--skill` default é
-`intelliforce-teams`; outras skills passam o slug delas pro audit do
-Vault ficar granular.
+Monta um Adaptive Card mínimo internamente:
+
+```
+[Subject (bold, medium)]   ← se passado
+[Texto da mensagem (wrap)]
+[via IntelliForce · 2026-05-04 18:00 UTC]   ← footer auto, override com --footer
+```
+
+`--webhook-secret` default: `teams-webhook-digital-employee`. Pra outro
+channel, passa o slug do secret correspondente.
+
+`--skill` default: `intelliforce-teams`. Outras skills passam o slug
+delas pra audit do Vault ficar granular.
 
 **Output (stdout, JSON):**
 
 ```json
 {
   "ok": true,
-  "id": "1735900000000",
-  "createdDateTime": "2026-05-04T20:00:00.000Z",
-  "webUrl": "https://teams.microsoft.com/l/message/...",
-  "team_id": "5c3dc897-...",
-  "channel_id": "19:b5ac...@thread.tacv2"
+  "status": 202,
+  "sent_at": "2026-05-04T18:00:00.000000+00:00"
 }
 ```
 
-### `listen` — espera mensagem nova (polling)
+### `send-card` — Adaptive Card customizado
+
+Pra notificações ricas (FactSet, Image, ColumnSet, Action.OpenUrl, etc.):
 
 ```bash
-python .../teams.py listen \
-    --team "<team_id|displayName>" \
-    --channel "<channel_id|displayName>" \
-    [--since <iso8601>] \
-    [--timeout 300] \
-    [--poll-interval 15] \
-    [--exclude-self]
+# de arquivo
+python .../teams.py send-card --card-file /tmp/my-card.json
+
+# inline (escape aspas conforme shell)
+python .../teams.py send-card --card-json '{"type":"AdaptiveCard","version":"1.4","body":[...]}'
+
+# pipe via stdin
+cat my-card.json | python .../teams.py send-card
 ```
 
-Polla `/teams/{id}/channels/{id}/messages?$top=20` a cada `--poll-interval`
-segundos até que apareça mensagem com `createdDateTime > since` (default:
-agora). Retorna a lista (1+ mensagens) e sai com 0. Se nada chegar até
-`--timeout`, sai com **3** + stderr `TIMEOUT: ...`.
-
-`--exclude-self` filtra mensagens do próprio app (evita auto-loop em fluxos
-"manda + escuta"). Bot conversation patterns típicos:
-
-```bash
-# Manda e espera resposta no mesmo channel
-python .../teams.py send --team Foo --channel Bar --message "Aprova?" --mention chefe@empresa.com
-python .../teams.py listen --team Foo --channel Bar --timeout 600 --exclude-self
-```
-
-### `list-teams` / `list-channels` / `resolve`
-
-```bash
-python .../teams.py list-teams                # array de {id, name, description}
-python .../teams.py list-channels --team Foo  # array de {id, name, ...}
-python .../teams.py resolve --team Foo --channel Bar  # {team_id, channel_id}
-```
-
-Útil pra descobrir IDs antes de cadastrar workflows. `resolve` aceita
-`--channel` opcional.
+⚠️ **Shape do JSON**: a raiz precisa ter `"type": "AdaptiveCard"` direto.
+Se você copiou de um exemplo com wrapper `{"contentType": "...", "content": {...}}`,
+o script desempacota automaticamente — mas o Power Automate flow espera
+sem wrapper. Use https://adaptivecards.io/designer pra prototipar.
 
 ## Erros (stderr categóricos)
 
 | Stderr | Causa | Ação |
 |---|---|---|
-| `VAULT_MISSING` | Secret `microsoft-teams` não cadastrado | Criar em /vault |
-| `VAULT_MISSING_FIELDS: ...` | Algum campo faltando | Recadastrar com 3 campos |
-| `AUTH_ERROR_400: invalid_client` | client_secret expirado/errado | Gerar novo no Azure |
-| `AUTH_ERROR_401: ...` | tenant_id ou client_id errados | Conferir IDs |
-| `PERMISSION_DENIED (Authorization_RequestDenied)` | Falta admin consent OU RSC no Team | Conferir permissions |
-| `NOT_FOUND` | team_id ou channel_id inválido / app sem acesso | `list-teams` pra ver disponíveis |
-| `TEAM_NOT_FOUND: 'xyz'. Disponíveis: [...]` | Nome do team não bate | Conferir spelling |
-| `CHANNEL_NOT_FOUND: 'xyz'` | Channel não existe no team | `list-channels --team X` |
-| `TIMEOUT` | listen sem mensagem nova até timeout | Aumentar `--timeout` |
-| `NETWORK_ERROR: ...` | Sem internet ou Graph offline | Retry |
+| `VAULT_MISSING` | Secret do webhook não cadastrado | Criar em `/vault` |
+| `VAULT_FIELD_MISSING` | Secret existe mas sem campo `url` | Recadastrar com campo `url` |
+| `VAULT_FIELD_EMPTY` | Campo `url` vazio | Editar e colar URL |
+| `WEBHOOK_UNAUTHORIZED (401/403)` | URL inválida ou expirada | Re-gerar URL no Power Automate, atualizar Vault |
+| `WEBHOOK_NOT_FOUND (404)` | Flow deletado | Recriar flow |
+| `WEBHOOK_BAD_REQUEST (400)` | Body inválido (geralmente shape de Adaptive Card) | Conferir card via designer |
+| `CARD_INVALID_JSON` | JSON malformado em `--card-file`/`--card-json`/stdin | Validar JSON antes |
+| `CARD_INVALID_SHAPE` | Raiz do JSON não tem `type: "AdaptiveCard"` | Tirar wrapper `{contentType, content}` |
+| `CARD_INPUT_MISSING` | `send-card` sem nenhum input | Passar `--card-file`, `--card-json` ou pipe |
+| `NETWORK_ERROR` | Sem internet ou Power Automate offline | Retry |
 
-Exit codes: 0 sucesso · 1 erro recuperável · 2 erro de uso · 3 timeout
+Exit codes: 0 sucesso · 1 erro de runtime · 2 erro de uso/input
 
-## Limitações conhecidas (app-only auth)
+## Limitações conhecidas
 
-- ❌ **DM 1:1 não suportado** — Graph proíbe app-only postar em chat 1:1
-  sem instalação prévia + RSC. Workaround: mandar no channel com
-  `--mention <upn>` (pessoa recebe notificação igual DM).
-- ❌ **Webhooks/subscription real-time**: precisariam endpoint público.
-  Esta skill só polla.
-- ⚠️ **Latência do listen**: limitada pelo `--poll-interval` (default 15s).
-  Pra menos: `--poll-interval 5` (mais carga).
+- ❌ **One-way**: webhook não recebe respostas. Pra fluxos do tipo
+  "perguntar e esperar", precisa Graph API + RSC (ver
+  `tools/teams-app-package/`).
+- ❌ **1 webhook por channel**: cada channel-alvo precisa de seu
+  próprio flow + secret no Vault. Não tem como mudar de channel
+  dinamicamente sem trocar a URL.
+- ❌ **Sem mention notificável**: Adaptive Card via Power Automate
+  posta como "Flow bot" e mention de pessoa exige `msteams.entities`
+  + UPN — possível mas não suportado nessa versão. Pra notificar
+  alguém, mande via Graph com `--mention` (após resolver RSC).
+- ⚠️ **SAS token na URL**: o `sig=...` da URL é o secret de auth. Se
+  vazar, qualquer um pode disparar o flow. Por isso fica no Vault.
+  Pra rotacionar: regenerar trigger no Power Automate (gera nova URL
+  + sig), atualizar Vault.
 
 ## Padrão de uso em outras skills
 
-Skill que precisa notificar/perguntar via Teams:
+Skill que precisa notificar via Teams:
 
 ```python
 import json, subprocess, sys
 
 TEAMS = "/opencode-runtime/.opencode/skills/intelliforce-teams/scripts/teams.py"
-TEAM = "Digital Employee"     # ou UUID
-CHANNEL = "Digital Employee"  # ou ID 19:...@thread.tacv2
 
-def notificar(msg: str, skill_slug: str, mention: str | None = None) -> str:
+def notificar(
+    message: str,
+    skill_slug: str,
+    *,
+    subject: str | None = None,
+    webhook_secret: str = "teams-webhook-digital-employee",
+) -> dict:
     cmd = [
         "python", TEAMS, "send",
-        "--team", TEAM, "--channel", CHANNEL,
-        "--message", msg, "--skill", skill_slug,
+        "--message", message,
+        "--webhook-secret", webhook_secret,
+        "--skill", skill_slug,
     ]
-    if mention:
-        cmd.extend(["--mention", mention])
+    if subject:
+        cmd.extend(["--subject", subject])
     r = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
     if r.returncode != 0:
         print(r.stderr.strip(), file=sys.stderr)
         sys.exit(1)
-    return json.loads(r.stdout)["id"]
-
-
-def aguardar_resposta(skill_slug: str, timeout: int = 600) -> dict | None:
-    r = subprocess.run(
-        ["python", TEAMS, "listen",
-         "--team", TEAM, "--channel", CHANNEL,
-         "--timeout", str(timeout), "--exclude-self",
-         "--skill", skill_slug],
-        capture_output=True, text=True, timeout=timeout + 30,
-    )
-    if r.returncode == 3:  # timeout
-        return None
-    if r.returncode != 0:
-        print(r.stderr.strip(), file=sys.stderr)
-        sys.exit(1)
-    msgs = json.loads(r.stdout)
-    return msgs[0] if msgs else None
+    return json.loads(r.stdout)
 
 
 # Uso:
-notificar("Aprovar reposição de estoque do produto X?",
-          skill_slug="monitor-estoque",
-          mention="gerente@empresa.com")
-resposta = aguardar_resposta(skill_slug="monitor-estoque", timeout=900)
-if resposta and "sim" in resposta["content"].lower():
-    pass  # ... aprovado ...
+notificar(
+    "Estoque do produto X abaixo do mínimo (12 unidades). "
+    "Recomenda-se reposição imediata.",
+    skill_slug="monitor-estoque",
+    subject="⚠️ Alerta de estoque crítico",
+)
 ```
 
-## Channel padrão do projeto: "Digital Employee"
+Pra Adaptive Card customizado (com FactSet, ColumnSet, etc.):
 
+```python
+def notificar_rico(card_dict: dict, skill_slug: str) -> dict:
+    r = subprocess.run(
+        [
+            "python", TEAMS, "send-card",
+            "--card-json", json.dumps(card_dict),
+            "--skill", skill_slug,
+        ],
+        capture_output=True, text=True, timeout=30,
+    )
+    if r.returncode != 0:
+        print(r.stderr.strip(), file=sys.stderr)
+        sys.exit(1)
+    return json.loads(r.stdout)
 ```
-team_id    = 5c3dc897-8eb0-4036-b087-442b0d3c3f2c
-channel_id = 19:b5ac149259034f8b9eb45ea6a20a0338@thread.tacv2
-```
 
-(IDs públicos — não são secrets, vêm da URL do channel.)
+## Channel padrão do projeto
 
-## Setup inicial — passo a passo
+| Team | Channel | Webhook secret |
+|---|---|---|
+| xOne - Notificações Sistêmicas | Digital Employee | `teams-webhook-digital-employee` |
 
-1. Cadastrar `microsoft-teams` no Vault com 3 campos.
-2. Adicionar permissions Application no App Registration + admin consent.
-3. Adicionar o app ao Team alvo (Manage team → Apps).
-4. Validar com:
-   ```bash
-   python .../teams.py list-teams --skill intelliforce-teams
-   ```
-   Se retornar array com seus teams: tudo OK. Se 403: revisar passos 2-3.
-5. Mandar uma mensagem teste:
-   ```bash
-   python .../teams.py send \
-       --team "Digital Employee" \
-       --channel "Digital Employee" \
-       --message "Hello from IntelliForce!"
-   ```
+Outros channels: crie 1 flow + 1 secret nomeado consistentemente
+(`teams-webhook-<channel-em-kebab-case>`).
+
+## Quando preferir Graph API em vez deste webhook
+
+Caminhos não atendidos por webhook (use Graph + RSC, ver
+`tools/teams-app-package/README.md`):
+
+- Receber respostas (`listen`)
+- Listar teams/channels dinamicamente
+- Mention de pessoa específica com notificação real
+- Postar em chat 1:1 ou grupo (não só channel)
+
+Pra todos os outros casos (notificações, alertas, relatórios, status
+updates) o webhook é mais simples e não esbarra em policy de tenant.

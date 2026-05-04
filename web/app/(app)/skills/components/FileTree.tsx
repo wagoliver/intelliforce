@@ -68,10 +68,16 @@ export function FileTree({
   onSelect,
   onToggleCollapsed,
 }: Props) {
-  // Estado de expansão de cada folder. Default: 3 categorias raiz expandidas;
-  // skill-instances (cada slug de skill) colapsados (user clica pra abrir).
+  // Estado de expansão de cada folder. Default: 3 categorias raiz expandidas
+  // + bundle "intelliforce" (sub-grupo) expandido. Skill folders individuais
+  // ficam colapsados (user clica pra abrir).
   const [expanded, setExpanded] = useState<Set<string>>(
-    () => new Set(["root:agents", "root:skills", "root:commands"]),
+    () => new Set([
+      "root:agents",
+      "root:skills",
+      "root:commands",
+      "bundle:intelliforce",
+    ]),
   );
 
   const total = tree.skills.length + tree.agents.length + tree.commands.length;
@@ -170,36 +176,61 @@ export function FileTree({
           ))}
         </CategoryFolder>
 
-        {/* skills — cada slug é um folder com SKILL.md dentro */}
+        {/* skills — separa bundle intelliforce-* (system seeds do operator) das
+            outras (custom criadas pelo user, karpathy, etc). Bundle agrupa
+            visualmente sob "intelliforce/" pra evitar 11 nomes longos com o
+            mesmo prefixo. No disco continua flat (sem mudança em paths). */}
         <CategoryFolder
           label="skills"
           count={tree.skills.length}
           expanded={expanded.has("root:skills")}
           onToggle={() => toggle("root:skills")}
         >
-          {tree.skills.map((f) => {
-            const key = `skill/${f.slug}`;
-            const folderKey = `skill-folder:${f.slug}`;
-            const isFolderExpanded = expanded.has(folderKey);
-            const isSeed = SEED_KEYS.has(key);
-            return (
-              <SkillFolder
-                key={key}
-                file={f}
-                isSeed={isSeed}
-                expanded={isFolderExpanded}
-                onToggle={() => toggle(folderKey)}
-              >
-                <FileLeaf
-                  file={f}
-                  filename="SKILL.md"
-                  selected={selected}
-                  recentlyCreated={recentlyCreated}
-                  onSelect={onSelect}
-                />
-              </SkillFolder>
+          {(() => {
+            const intelliforceSkills = tree.skills.filter((s) =>
+              s.slug.startsWith("intelliforce-"),
             );
-          })}
+            const otherSkills = tree.skills.filter(
+              (s) => !s.slug.startsWith("intelliforce-"),
+            );
+            return (
+              <>
+                {intelliforceSkills.length > 0 && (
+                  <IntelliforceBundle
+                    skills={intelliforceSkills}
+                    expanded={expanded.has("bundle:intelliforce")}
+                    selected={selected}
+                    recentlyCreated={recentlyCreated}
+                    onToggle={() => toggle("bundle:intelliforce")}
+                    onSelect={onSelect}
+                  />
+                )}
+                {otherSkills.map((f) => {
+                  const key = `skill/${f.slug}`;
+                  const folderKey = `skill-folder:${f.slug}`;
+                  const isFolderExpanded = expanded.has(folderKey);
+                  const isSeed = SEED_KEYS.has(key);
+                  return (
+                    <SkillFolder
+                      key={key}
+                      file={f}
+                      isSeed={isSeed}
+                      expanded={isFolderExpanded}
+                      onToggle={() => toggle(folderKey)}
+                    >
+                      <FileLeaf
+                        file={f}
+                        filename="SKILL.md"
+                        selected={selected}
+                        recentlyCreated={recentlyCreated}
+                        onSelect={onSelect}
+                      />
+                    </SkillFolder>
+                  );
+                })}
+              </>
+            );
+          })()}
         </CategoryFolder>
 
         {/* commands — files diretos (geralmente vazio no MVP) */}
@@ -342,6 +373,79 @@ function SkillFolder({
             style={{ overflow: "hidden" }}
           >
             <div className="skills-tree-children-inner">{children}</div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* IntelliforceBundle — agrupa skills intelliforce-* numa pasta sintética     */
+/* -------------------------------------------------------------------------- */
+
+function IntelliforceBundle({
+  skills,
+  expanded,
+  selected,
+  recentlyCreated,
+  onToggle,
+  onSelect,
+}: {
+  skills: OpenCodeFile[];
+  expanded: boolean;
+  selected: Selected;
+  recentlyCreated: Set<string>;
+  onToggle: () => void;
+  onSelect: (file: OpenCodeFile) => void;
+}) {
+  const Icon = expanded ? FolderOpenIcon : FolderClosedIcon;
+  return (
+    <div className="skills-tree-node">
+      <button
+        type="button"
+        className="skills-tree-row skills-tree-row--folder skills-tree-row--nested"
+        onClick={onToggle}
+        aria-expanded={expanded}
+        title="Skills do agente Operator (system seeds)"
+        onMouseMove={(e) => {
+          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+          e.currentTarget.style.setProperty("--mx", `${e.clientX - rect.left}px`);
+          e.currentTarget.style.setProperty("--my", `${e.clientY - rect.top}px`);
+        }}
+      >
+        <span className="skills-tree-chevron" style={{ color: "var(--text-subtle)" }}>
+          <ChevronIcon expanded={expanded} />
+        </span>
+        <span className="skills-tree-icon">
+          <Icon size={18} />
+          <span className="skills-tree-lock-badge" aria-label="Imutável">
+            <LockBadge />
+          </span>
+        </span>
+        <span className="skills-tree-name skills-tree-name--mono">intelliforce</span>
+        <span className="skills-tree-count">{skills.length}</span>
+      </button>
+      <AnimatePresence initial={false}>
+        {expanded && (
+          <motion.div
+            key="children"
+            className="skills-tree-children"
+            {...ANIM}
+            style={{ overflow: "hidden" }}
+          >
+            <div className="skills-tree-children-inner">
+              {skills.map((f) => (
+                <FileLeaf
+                  key={`skill/${f.slug}`}
+                  file={f}
+                  filename={f.slug.replace(/^intelliforce-/, "")}
+                  selected={selected}
+                  recentlyCreated={recentlyCreated}
+                  onSelect={onSelect}
+                />
+              ))}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

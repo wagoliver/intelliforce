@@ -29,11 +29,23 @@ async function forward(req: NextRequest, pathSegments: string[], method: string)
   const upstream = await fetch(url, { method, headers, body, cache: "no-store" });
   const text = await upstream.text();
 
-  return new NextResponse(text, {
+  // HTTP spec / Fetch API: status 204 (No Content), 205 (Reset Content) e
+  // 304 (Not Modified) NÃO podem carregar body. O `Response` constructor do
+  // undici (Node 18+) valida isso e joga TypeError("Invalid response status
+  // code 204") se passarmos string vazia em vez de null.
+  const NULL_BODY_STATUSES = new Set([204, 205, 304]);
+  const responseBody = NULL_BODY_STATUSES.has(upstream.status) ? null : text;
+
+  // Pra respostas sem-body, não fazemos sentido forçar Content-Type.
+  const responseHeaders: Record<string, string> = {};
+  if (!NULL_BODY_STATUSES.has(upstream.status)) {
+    responseHeaders["Content-Type"] =
+      upstream.headers.get("Content-Type") ?? "application/json";
+  }
+
+  return new NextResponse(responseBody, {
     status: upstream.status,
-    headers: {
-      "Content-Type": upstream.headers.get("Content-Type") ?? "application/json",
-    },
+    headers: responseHeaders,
   });
 }
 

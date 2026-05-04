@@ -159,7 +159,7 @@ function OrgHeader({ orgList }: { orgList: any[] }) {
           <div className="oh-stat-l">{t("avg_sla")}</div>
           <div className="oh-stat-v">99.0%</div>
         </div>
-        <a className="oh-cta" href="/setup">
+        <a className="oh-cta" href="/skills?cmd=new-dept" title="Conversa com o Operator pra criar um departamento novo">
           <SvgIcon className="ico" name="plus" />
           {t("new_department")}
         </a>
@@ -196,7 +196,11 @@ function DepartmentRow({ dept }: any) {
             <span className="dot" />
             {dept.health === "healthy" ? t("on_track") : t("needs_attention")}
           </div>
-          <a className="dept-edit" href={`/setup`} title={t("edit")}>
+          <a
+            className="dept-edit"
+            href={`/skills?cmd=edit-dept&id=${dept.id}`}
+            title="Conversa com o Operator pra editar"
+          >
             <SvgIcon className="ico" name="edit" />
             {t("edit")}
           </a>
@@ -579,7 +583,7 @@ function EmptyState() {
       <p style={{ color: "var(--text-muted)", marginTop: 12, marginBottom: 24 }}>
         {t("empty_sub")}
       </p>
-      <a href="/setup" className="oh-cta" style={{ display: "inline-flex" }}>
+      <a href="/skills?cmd=new-dept" className="oh-cta" style={{ display: "inline-flex" }}>
         + {t("create_first")}
       </a>
     </div>

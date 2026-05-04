@@ -92,6 +92,13 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     template: "Quero criar um digital employee novo e alocá-lo numa atividade. Pergunte os detalhes (nome, modelo, qual activity, quantos instâncias).",
     agents: "operator",
   },
+  {
+    slug: "edit-dept",
+    label: "/edit-dept",
+    description: "Editar um departamento existente (aceita id via query)",
+    template: "Quero editar o departamento {id}. Primeiro me mostre o estado atual dele (nome, objetivo, squads, atividades) e depois pergunte o que devo alterar.",
+    agents: "operator",
+  },
 
   // ============== BUILDER ==============
   {

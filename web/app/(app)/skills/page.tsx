@@ -1,6 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { EmptyState } from "./components/EmptyState";
@@ -11,7 +12,7 @@ import { SlashPalette } from "./components/SlashPalette";
 import { useChatStream } from "./hooks/useChatStream";
 import { useOpenCodeTree, type OpenCodeFile, type OpenCodeTree } from "./hooks/useOpenCodeTree";
 import { useReducedMotion } from "./hooks/useReducedMotion";
-import { commandsForAgent, filterCommands, type SlashCommand } from "./state/slash-commands";
+import { SLASH_COMMANDS, commandsForAgent, filterCommands, type SlashCommand } from "./state/slash-commands";
 import type { ChatMessage, ThinkingLine, ToolCall } from "./state/types";
 
 const SLIDE_UP = {
@@ -71,11 +72,49 @@ export default function SkillsPage() {
     setSlashIndex(0);
   }, [slashQuery, agent]);
 
-  function applySlashCommand(cmd: SlashCommand) {
-    setInput(cmd.template);
+  function applySlashCommand(cmd: SlashCommand, params?: Record<string, string>) {
+    let template = cmd.template;
+    if (params) {
+      for (const [key, value] of Object.entries(params)) {
+        template = template.replaceAll(`{${key}}`, value);
+      }
+    }
+    setInput(template);
     setSlashIndex(0);
     setTimeout(() => inputRef.current?.focus(), 0);
   }
+
+  // Aplica slash command vindo via query param (ex: dashboard linkando "criar dept")
+  const searchParams = useSearchParams();
+  const appliedQueryRef = useRef(false);
+  useEffect(() => {
+    if (appliedQueryRef.current) return;
+    const cmdSlug = searchParams.get("cmd");
+    if (!cmdSlug) return;
+    const command = SLASH_COMMANDS.find((c) => c.slug === cmdSlug);
+    if (!command) return;
+
+    // Força agente correto se o command exige um específico
+    if (command.agents === "operator" && agent !== "operator") setAgent("operator");
+    if (command.agents === "builder" && agent !== "builder") setAgent("builder");
+
+    // Coleta params extras (ex: id) pra substituir placeholders no template
+    const params: Record<string, string> = {};
+    searchParams.forEach((value, key) => {
+      if (key !== "cmd") params[key] = value;
+    });
+
+    applySlashCommand(command, params);
+    appliedQueryRef.current = true;
+
+    // Limpa query params da URL sem reload (mantém estado React)
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.search = "";
+      window.history.replaceState({}, "", url.pathname);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   // auto-scroll
   useEffect(() => {

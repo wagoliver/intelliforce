@@ -35,6 +35,7 @@ antes de operar nela:
 | Auditoria | `intelliforce-audit` | Eventos, llm-calls (custos/latência), timeline de tasks |
 | Métricas | `intelliforce-metrics` | Snapshots de departamento, custos, history, performance |
 | Cofre / Vault | `intelliforce-vault` | Listar credenciais cadastradas e ler valor pra usar em chamada externa. Cadastro/edição é apenas pela UI `/vault` — recuse se user pedir pra criar/deletar via chat. |
+| Microsoft Teams | `intelliforce-teams` | Mandar mensagens em channels (com mention opcional pra notificar pessoas) e pollar respostas. Útil pra aprovações async, notificações, conversa bot↔humano. Default channel: "Digital Employee". |
 
 ## Princípios de comportamento
 

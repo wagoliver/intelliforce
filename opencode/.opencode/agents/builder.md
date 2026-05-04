@@ -234,7 +234,7 @@ nesta sessão; ele provavelmente foi criado em uma conversa anterior."**
 
   **Skills seed (referência comportamental + skills do operator):**
   - `skills/karpathy-guidelines/SKILL.md`
-  - **Qualquer pasta que comece com `skills/intelliforce-`** — todas as skills do operator são seeds (intelliforce-api, intelliforce-discover, intelliforce-departments, intelliforce-squads, intelliforce-activities, intelliforce-agents, intelliforce-instances, intelliforce-tasks, intelliforce-approvals, intelliforce-audit, intelliforce-metrics, intelliforce-vault). Inclui SKILL.md **e os scripts/ Python dentro delas**.
+  - **Qualquer pasta que comece com `skills/intelliforce-`** — todas as skills do operator são seeds (intelliforce-api, intelliforce-discover, intelliforce-departments, intelliforce-squads, intelliforce-activities, intelliforce-agents, intelliforce-instances, intelliforce-tasks, intelliforce-approvals, intelliforce-audit, intelliforce-metrics, intelliforce-vault, intelliforce-teams). Inclui SKILL.md **e os scripts/ Python dentro delas**.
 
   Se o usuário pedir pra modificar/deletar/sobrescrever qualquer um desses, **recuse** explicando que são seeds protegidos. Sugira que ele:
   1. Abra um PR no repositório alterando o arquivo de origem em `opencode/.opencode/...`

@@ -70,4 +70,5 @@ export const SEED_KEYS = new Set<string>([
   "skill/intelliforce-audit",
   "skill/intelliforce-metrics",
   "skill/intelliforce-vault",
+  "skill/intelliforce-teams",
 ]);

@@ -23,6 +23,12 @@ from intelliforce.settings import get_settings
 
 log = structlog.get_logger()
 
+# Buffer máximo por linha NDJSON do CLI OpenCode. Default do StreamReader é
+# 64KB, mas eventos podem ser bem maiores quando carregam tool results (ex:
+# Read num arquivo longo, texto extenso de resposta do modelo). 10MB cobre
+# casos práticos sem comprometer memória.
+_STREAM_LIMIT_BYTES = 10 * 1024 * 1024
+
 
 @dataclass
 class OpenCodeResult:
@@ -92,6 +98,7 @@ class OpenCodeRunner:
                 cwd=self.config_path,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                limit=_STREAM_LIMIT_BYTES,
             )
             try:
                 stdout_bytes, stderr_bytes = await asyncio.wait_for(
@@ -211,6 +218,7 @@ class OpenCodeRunner:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 env=env,
+                limit=_STREAM_LIMIT_BYTES,
             )
 
             yield {"type": "stream_start", "command": cmd}

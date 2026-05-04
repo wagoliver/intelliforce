@@ -53,7 +53,7 @@ export default function SkillsPage() {
   }, [agent]);
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const wasStreamingRef = useRef(false);
   const refetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevTreeKeysRef = useRef<Set<string>>(new Set());
@@ -122,6 +122,15 @@ export default function SkillsPage() {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [state.messages]);
+
+  // Auto-resize do textarea — cresce com o conteúdo até max-height (CSS).
+  // Reset pra "auto" antes de medir scrollHeight (sem isso, height só cresce).
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [input]);
 
   // Refetch tree quando stream termina
   useEffect(() => {
@@ -274,7 +283,7 @@ export default function SkillsPage() {
             />
             <div className="skills-composer">
               <div className="skills-composer-inner">
-                <input
+                <textarea
                   ref={inputRef}
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
@@ -309,7 +318,7 @@ export default function SkillsPage() {
                         return;
                       }
                     }
-                    // Sem palette: Enter envia
+                    // Enter envia · Shift+Enter quebra linha (deixa default do textarea)
                     if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
                       onSubmit();
@@ -318,9 +327,10 @@ export default function SkillsPage() {
                   placeholder={
                     state.isStreaming
                       ? "OpenCode trabalhando…"
-                      : "O que você quer construir? (digite / para comandos)"
+                      : "O que você quer construir? (Enter envia · Shift+Enter quebra linha · / para comandos)"
                   }
                   disabled={state.isStreaming}
+                  rows={1}
                   className="skills-composer-input"
                   aria-label="Mensagem para o OpenCode"
                 />

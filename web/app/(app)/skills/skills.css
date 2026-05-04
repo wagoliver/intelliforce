@@ -630,6 +630,7 @@
 }
 .skills-composer-inner {
   display: flex; gap: 10px;
+  align-items: flex-end;        /* botão alinha no canto debaixo quando textarea cresce */
   background: var(--bg-elev);
   border-radius: 13px;
   padding: 6px;
@@ -640,12 +641,27 @@
   border: none;
   border-radius: 9px;
   font-size: 14.5px;
+  line-height: 1.45;
   background: transparent;
   color: var(--text);
   outline: none;
   font-family: inherit;
+  resize: none;                 /* sem corner-grip — auto-resize via JS */
+  max-height: 180px;            /* ~6 linhas; daí em diante scroll interno */
+  overflow-y: auto;
+  /* Estado inicial sincronizado com 1 linha (rows=1 + line-height) */
+  min-height: calc(1.45em + 20px);
 }
 .skills-composer-input::placeholder { color: var(--text-subtle); }
+/* Scrollbar discreto quando textarea passa do max-height */
+.skills-composer-input::-webkit-scrollbar { width: 6px; }
+.skills-composer-input::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+.skills-composer-input::-webkit-scrollbar-thumb:hover {
+  background: var(--border-strong);
+}
 .skills-composer-button {
   padding: 10px 22px;
   border: none;

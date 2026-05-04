@@ -203,7 +203,15 @@ function DepartmentRow({ dept }: any) {
   }, [dept.id]);
 
   return (
-    <section className={`dept dept--${dept.health}`}>
+    <section
+      className={`dept dept--${dept.health}`}
+      onMouseMove={(e) => {
+        const target = e.currentTarget as HTMLElement;
+        const rect = target.getBoundingClientRect();
+        target.style.setProperty("--mx", `${e.clientX - rect.left}px`);
+        target.style.setProperty("--my", `${e.clientY - rect.top}px`);
+      }}
+    >
       <div className="dept-left">
         <div className="dept-id">
           <h2 className="dept-name">{dept.name}</h2>

@@ -137,6 +137,19 @@ function OrgHeader({ orgList }: { orgList: any[] }) {
   const totalAgents = orgList.reduce((s, d: any) => s + Object.values(d.agents).reduce((a: any, b: any) => a + b, 0), 0);
   const totalActive = orgList.reduce((s, d) => s + d.agents.active, 0);
   const totalCost = orgList.reduce((s, d) => s + d.cost.monthly, 0);
+
+  // SLA real: 100% - média ponderada de error_pct (peso = execuções nas últimas 12h).
+  // Se nenhum dept tem dados, mostra "—" em vez de inventar número.
+  const totalExecuted = orgList.reduce((s, d) => s + (d.metrics?.executed ?? 0), 0);
+  const weightedError = orgList.reduce(
+    (s, d) => s + (d.metrics?.errorPct ?? 0) * (d.metrics?.executed ?? 0),
+    0,
+  );
+  const slaDisplay =
+    totalExecuted > 0
+      ? `${(100 - weightedError / totalExecuted).toFixed(1)}%`
+      : "—";
+
   return (
     <header className="org-header">
       <div className="oh-head">
@@ -157,7 +170,9 @@ function OrgHeader({ orgList }: { orgList: any[] }) {
         </div>
         <div className="oh-stat">
           <div className="oh-stat-l">{t("avg_sla")}</div>
-          <div className="oh-stat-v">99.0%</div>
+          <div className="oh-stat-v" title={`SLA = 100% - média ponderada de erro (${totalExecuted.toLocaleString()} execuções últimas 12h)`}>
+            {slaDisplay}
+          </div>
         </div>
         <a className="oh-cta" href="/skills?cmd=new-dept" title="Conversa com o Operator pra criar um departamento novo">
           <SvgIcon className="ico" name="plus" />

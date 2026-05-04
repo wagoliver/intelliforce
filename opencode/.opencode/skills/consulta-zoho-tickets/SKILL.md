@@ -12,15 +12,17 @@ Skill que conecta ao Zoho Desk via OAuth 2.0, renova o access token em runtime, 
 
 ## Pré-requisitos (Vault)
 
-Esta skill depende de 3 segredos cadastrados no Cofre (`/vault`):
+Esta skill depende de **1 secret multi-campo** cadastrado no Cofre (`/vault`):
 
-| Slug | Descrição |
-|------|-----------|
-| `zoho-client-id` | Client ID da aplicação Zoho |
-| `zoho-client-secret` | Client Secret da aplicação Zoho |
-| `zoho-refresh-token` | Refresh Token original (não expira) |
+| Slug | Campos |
+|------|--------|
+| `zoho` | `client_id`, `client_secret`, `refresh_token` |
 
-Se algum slug faltar, o script falha com erro categórico indicando qual credencial está ausente.
+- **`client_id`** — Client ID da aplicação OAuth no Zoho |
+- **`client_secret`** — Client Secret da aplicação OAuth no Zoho |
+- **`refresh_token`** — Refresh Token original (não expira) |
+
+Se o secret ou algum campo faltar, o script falha com erro categórico.
 
 ## Uso
 

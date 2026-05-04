@@ -25,22 +25,23 @@ SKILL_SLUG = "consulta-zoho-tickets"
 # ──────────────────────────────────────────
 # Helpers
 # ──────────────────────────────────────────
-def get_vault_secret(slug: str) -> str:
-    """Busca um segredo do Vault. Sai com erro se falhar."""
+def get_vault_credentials(slug: str) -> dict:
+    """Busca credenciais multi-campo do Vault. Sai com erro se falhar."""
     result = subprocess.run(
         [
             "python", VAULT_SCRIPT, "get", slug,
             "--skill", SKILL_SLUG,
+            "--all-fields",
         ],
         capture_output=True, text=True, timeout=20,
     )
     if result.returncode != 0:
         print(
-            f"Erro ao buscar credencial '{slug}' no Vault: {result.stderr.strip()}",
+            f"Erro ao buscar credenciais '{slug}' no Vault: {result.stderr.strip()}",
             file=sys.stderr,
         )
         sys.exit(1)
-    return result.stdout
+    return json.loads(result.stdout)
 
 
 def strip_html(text: str) -> str:
@@ -150,10 +151,11 @@ def fetch_agents(access_token: str) -> dict:
 # Main
 # ──────────────────────────────────────────
 def main():
-    # 1. Credenciais do Vault
-    client_id = get_vault_secret("zoho-client-id")
-    client_secret = get_vault_secret("zoho-client-secret")
-    refresh_token = get_vault_secret("zoho-refresh-token")
+    # 1. Credenciais do Vault (secret multi-campo `zoho`)
+    creds = get_vault_credentials("zoho")
+    client_id     = creds["client_id"]
+    client_secret = creds["client_secret"]
+    refresh_token = creds["refresh_token"]
 
     # 2. Renova token
     access_token = refresh_access_token(client_id, client_secret, refresh_token)

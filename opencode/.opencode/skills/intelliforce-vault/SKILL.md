@@ -1,6 +1,6 @@
 ---
 name: intelliforce-vault
-description: Cofre seguro de credenciais. Cada secret carrega 1 ou mais campos key→value (ex.: zoho com client_id + client_secret + refresh_token), criptografados juntos no mesmo blob. Esta skill ensina a listar, ler campo específico ou todos de uma vez. Cadastro/edição/remoção é feito apenas pela UI /vault.
+description: "Cofre seguro de credenciais. Cada secret carrega 1+ campos key→value agrupados (ex zoho com client_id, client_secret e refresh_token), criptografados juntos no mesmo blob. Esta skill ensina a listar, ler campo específico ou todos de uma vez. Cadastro/edição/remoção é feito apenas pela UI /vault."
 license: MIT
 allowed-tools:
   - Bash(python /opencode-runtime/.opencode/skills/intelliforce-vault/scripts/vault.py *)

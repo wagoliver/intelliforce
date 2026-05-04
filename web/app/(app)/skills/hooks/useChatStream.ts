@@ -163,8 +163,55 @@ const IGNORE_TYPES = new Set([
   "message_end",
 ]);
 
+// Tipos que indicam INÍCIO de tool call (variações de naming entre versões
+// do OpenCode + Anthropic SDK)
+const TOOL_START_TYPES = new Set([
+  "tool_use_start",
+  "tool_use",        // Anthropic API NDJSON: bloco solo "tool_use" começa a tool
+  "tool_call",       // OpenAI-compat naming
+  "tool",            // OpenCode older naming
+  "tool_invocation",
+]);
+
+// Tipos que indicam FIM de tool call
+const TOOL_END_TYPES = new Set([
+  "tool_use_end",
+  "tool_result",
+  "tool_response",
+]);
+
+// Reasoning/thinking deltas — o Claude expõe esses quando "pensa em voz alta"
+const REASONING_TYPES = new Set([
+  "reasoning",
+  "thinking",
+  "thought",
+  "reasoning_delta",
+]);
+
+/** Extrai um identificador estável da tool call (mesmo entre start e end). */
+function extractToolId(event: any): string {
+  const part = event?.part ?? {};
+  return (
+    part?.id ??
+    part?.callID ??
+    part?.toolUseID ??
+    part?.tool_use_id ??
+    event?.id ??
+    event?.callID ??
+    ""
+  );
+}
+
 function mapEventToAction(event: any): ChatAction | null {
   const type: string = event?.type ?? "";
+
+  // Debug em modo dev: loga TODOS os eventos do CLI no console pra
+  // diagnóstico futuro. Setar window.__OPENCODE_DEBUG__ = true no console
+  // do navegador (ou em qualquer lugar) ativa.
+  if (typeof window !== "undefined" && (window as any).__OPENCODE_DEBUG__) {
+    // eslint-disable-next-line no-console
+    console.debug("[opencode]", type, event);
+  }
 
   // Eventos sintéticos do runner
   if (type === "stream_start") {
@@ -184,18 +231,42 @@ function mapEventToAction(event: any): ChatAction | null {
     return { type: "TEXT_DELTA", text };
   }
 
-  // Tool calls — naming exato do OpenCode pode variar; lidamos com formas comuns
-  if (type === "tool_use_start" || type === "tool" || type === "tool_call") {
-    const part = event?.part ?? event ?? {};
-    const tool = part?.tool ?? part?.name ?? "tool";
-    const description = describeToolInput(part);
-    const id = part?.id ?? part?.callID ?? genId();
-    return { type: "TOOL_CALL_STARTED", id, tool, description };
+  // Reasoning/thinking — dá visibilidade do "voz mental" do Claude
+  if (REASONING_TYPES.has(type)) {
+    const reasoning = event?.part?.text ?? event?.part?.thinking ?? event?.part?.reasoning ?? "";
+    const txt = String(reasoning).trim();
+    if (!txt) return null;
+    return {
+      type: "THINKING_LINE",
+      id: genId(),
+      kind: "reasoning",
+      label: txt.slice(0, 200),
+    };
   }
-  if (type === "tool_use_end" || type === "tool_result") {
+
+  // Tool calls — INÍCIO. Detecta por type OU por shape (presença de tool name).
+  const looksLikeToolStart =
+    TOOL_START_TYPES.has(type) ||
+    (event?.part?.type && TOOL_START_TYPES.has(event.part.type)) ||
+    // shape match: evento com `part.tool` ou `part.name` E sem result/error
+    (event?.part &&
+      typeof event.part === "object" &&
+      (event.part.tool || event.part.name) &&
+      event.part.input !== undefined &&
+      event.part.output === undefined);
+
+  if (looksLikeToolStart) {
     const part = event?.part ?? event ?? {};
-    const id = part?.id ?? part?.callID ?? "";
+    const tool = part?.tool ?? part?.name ?? type ?? "tool";
+    const description = describeToolInput(part);
+    const id = extractToolId(event) || genId();
+    return { type: "TOOL_CALL_STARTED", id, tool: String(tool), description };
+  }
+
+  if (TOOL_END_TYPES.has(type)) {
+    const id = extractToolId(event);
     if (!id) return null;
+    const part = event?.part ?? event ?? {};
     const isError = part?.is_error ?? part?.error ?? false;
     return { type: "TOOL_CALL_FINISHED", id, status: isError ? "error" : "done" };
   }
@@ -221,6 +292,15 @@ function mapEventToAction(event: any): ChatAction | null {
  */
 function describeUnknownEvent(event: any): string {
   const part = event?.part ?? event ?? {};
+
+  // Caso especial: evento traz nome de tool mas não casou com TOOL_START_TYPES.
+  // Tenta inferir uma descrição combinando nome + input.
+  if (part?.tool || part?.name) {
+    const desc = describeToolInput(part);
+    const tool = String(part?.tool ?? part?.name);
+    return desc ? `${tool} · ${desc}` : tool;
+  }
+
   const candidates = [
     part?.reasoning,
     part?.thought,

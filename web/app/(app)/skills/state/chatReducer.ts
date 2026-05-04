@@ -73,7 +73,14 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
           ...m,
           toolCalls: [
             ...m.toolCalls,
-            { id: action.id, tool: action.tool, description: action.description, status: "running" },
+            {
+              id: action.id,
+              tool: action.tool,
+              description: action.description,
+              status: "running",
+              startedAt: Date.now(),
+              finishedAt: null,
+            },
           ],
         })),
       };
@@ -84,7 +91,9 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         messages: updateLastAgentMessage(state.messages, (m) => ({
           ...m,
           toolCalls: m.toolCalls.map((tc) =>
-            tc.id === action.id ? { ...tc, status: action.status } : tc,
+            tc.id === action.id
+              ? { ...tc, status: action.status, finishedAt: Date.now() }
+              : tc,
           ),
         })),
       };

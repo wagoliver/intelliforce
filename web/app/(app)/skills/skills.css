@@ -519,6 +519,33 @@
   max-width: 520px;
 }
 
+.skills-live-extra-count {
+  position: relative;
+  z-index: 1;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--accent-cyan) 18%, transparent);
+  color: var(--accent-cyan);
+  flex-shrink: 0;
+}
+
+/* Cronômetro dentro do tool call ou live-status: tom mais sutil */
+.skills-toolcall .skills-live-clock,
+.skills-live-status .skills-live-clock {
+  font-size: 10px;
+  margin-left: auto;        /* empurra pro fim da linha */
+  padding-left: 6px;
+}
+.skills-toolcall--running .skills-live-clock {
+  color: var(--accent-cyan);
+}
+.skills-toolcall--done .skills-live-clock {
+  color: var(--text-subtle);
+}
+
 /* Pulse dot — sinal "estou vivo" mesmo se nenhum evento chegou ainda */
 .skills-live-pulse {
   position: relative;

@@ -5,6 +5,8 @@ export type ToolCall = {
   tool: string;          // "Bash" | "Write" | "Read" | etc — vem do CLI
   description: string;   // 1-line summary (path, comando)
   status: ToolCallStatus;
+  startedAt: number;            // ms epoch — pra cronômetro individual
+  finishedAt: number | null;    // congela o tempo dela quando termina
 };
 
 /**

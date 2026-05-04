@@ -577,6 +577,7 @@ function ToolCallLine({
       </span>
       <span className="skills-toolcall-tool">{call.tool}</span>
       {call.description && <span className="skills-toolcall-desc">{call.description}</span>}
+      <LiveClock startedAt={call.startedAt} finishedAt={call.finishedAt} />
     </motion.div>
   );
 }
@@ -632,14 +633,22 @@ function LiveStatus({
   message: Extract<ChatMessage, { role: "agent" }>;
   reducedMotion: boolean;
 }) {
-  const lastRunningTool = [...message.toolCalls].reverse().find((tc) => tc.status === "running");
+  const runningTools = message.toolCalls.filter((tc) => tc.status === "running");
+  const lastRunningTool = runningTools[runningTools.length - 1];
   const lastThinking = message.thinkingLines[message.thinkingLines.length - 1];
   const hasText = message.text.length > 0;
 
+  // Linha 1 (sempre presente enquanto streaming): estado geral
   let label: string;
   let kind: "thinking" | "tool" | "reasoning" | "writing";
 
-  if (hasText) {
+  if (hasText && lastRunningTool) {
+    // Texto streaming + tool em paralelo: prioridade visual ao tool
+    // (texto já é visível na bolha, então o status mostra o que NÃO é óbvio)
+    const desc = lastRunningTool.description ? ` · ${lastRunningTool.description}` : "";
+    label = `${lastRunningTool.tool}${desc}`;
+    kind = "tool";
+  } else if (hasText) {
     label = "Gerando resposta…";
     kind = "writing";
   } else if (lastRunningTool) {
@@ -665,6 +674,14 @@ function LiveStatus({
     >
       <span className="skills-live-pulse" aria-hidden="true" />
       <span className="skills-live-label">{label}</span>
+      {lastRunningTool && (
+        <LiveClock startedAt={lastRunningTool.startedAt} finishedAt={null} />
+      )}
+      {runningTools.length > 1 && (
+        <span className="skills-live-extra-count" title="Outras tools em paralelo">
+          +{runningTools.length - 1}
+        </span>
+      )}
     </motion.div>
   );
 }

@@ -169,7 +169,11 @@ docker-compose.override.yml
 *.onnx
 *.h5
 *.ckpt
-models/
+# Diretórios "models/" usados pra artefatos ML em treinamento.
+# Não confundir com SQLAlchemy models do projeto (worker/intelliforce/db/models/)
+# nem qualquer outro código fonte com pasta "models/".
+/models/
+**/ml-models/
 checkpoints/
 embeddings/
 

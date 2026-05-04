@@ -1,10 +1,13 @@
-"""Endpoints do Vault — CRUD imutável de secrets + audit log.
+"""Endpoints do Vault — CRUD imutável de secrets multi-field + audit log.
 
 Imutabilidade: SEM PATCH/PUT. Pra alterar valor: DELETE + POST.
+Multi-field: 1 secret carrega N campos key→value, criptografados juntos no
+mesmo blob Fernet (atualização atômica, audit por campo).
 Audit log é append-only e preserva slug snapshot mesmo após delete.
 """
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
@@ -15,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from intelliforce.api.deps import get_current_user, get_db
 from intelliforce.api.schemas.secret import (
     SecretAccessLogOut,
+    SecretAllValuesOut,
     SecretCreateRequest,
     SecretOut,
     SecretValueOut,
@@ -50,6 +54,7 @@ async def _log_access(
     skill: str | None = None,
     task_id: object | None = None,
     ip: str | None = None,
+    field_accessed: str | None = None,
 ) -> None:
     db.add(
         SecretAccessLog(
@@ -61,8 +66,51 @@ async def _log_access(
             action=action,
             accessed_at=datetime.now(timezone.utc),
             ip_address=ip,
+            field_accessed=field_accessed,
         )
     )
+
+
+def _decrypt_fields(secret: Secret) -> dict[str, str]:
+    """Descriptografa o blob e parse JSON dos campos.
+
+    Falha → 500 (corrupção ou key trocada).
+    """
+    vault = get_vault()
+    try:
+        plaintext = vault.decrypt(secret.encrypted_value)
+    except VaultError as e:
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Falha de descriptografia: {e}",
+        ) from e
+
+    try:
+        data = json.loads(plaintext)
+    except json.JSONDecodeError as e:
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Blob descriptografado não é JSON válido: {e}",
+        ) from e
+
+    if not isinstance(data, dict) or not all(
+        isinstance(k, str) and isinstance(v, str) for k, v in data.items()
+    ):
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Estrutura inválida — esperava dict[str, str]",
+        )
+    return data
+
+
+def _parse_task_id(x_task_id: str | None) -> object | None:
+    if not x_task_id:
+        return None
+    try:
+        import uuid as _uuid
+        return _uuid.UUID(x_task_id)
+    except ValueError:
+        return None
 
 
 # -----------------------------------------------------------------------------
@@ -75,14 +123,18 @@ async def create_secret(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> SecretOut:
-    """Cria secret. 409 se slug já existe (imutabilidade — delete antes)."""
+    """Cria secret com 1+ campos. 409 se slug já existe (imutabilidade)."""
     vault = get_vault()
-    encrypted = vault.encrypt(payload.value)
+    # Serializa fields como dict ordenado pro JSON, encripta o blob inteiro
+    fields_dict = {f.key: f.value for f in payload.fields}
+    plaintext = json.dumps(fields_dict, ensure_ascii=False)
+    encrypted = vault.encrypt(plaintext)
 
     secret = Secret(
         slug=payload.slug,
         description=payload.description,
         encrypted_value=encrypted,
+        field_keys=[f.key for f in payload.fields],
         tags=payload.tags,
         created_by_user_id=user.id,
     )
@@ -117,46 +169,46 @@ async def list_secrets(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[SecretOut]:
-    """Lista metadata de todos os secrets. NUNCA devolve valor."""
+    """Lista metadata de todos os secrets — nomes dos campos, sem valores."""
     result = await db.execute(select(Secret).order_by(Secret.slug))
     return [SecretOut.model_validate(s) for s in result.scalars().all()]
 
 
 @router.get("/{slug}/value", response_model=SecretValueOut)
-async def read_secret_value(
+async def read_secret_field(
     slug: str,
+    field: str,
     request: Request,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     x_skill_slug: str | None = Header(default=None, alias="X-Skill-Slug"),
     x_task_id: str | None = Header(default=None, alias="X-Task-Id"),
 ) -> SecretValueOut:
-    """Único endpoint que devolve plaintext. Atualiza last_accessed_at + audit."""
+    """Retorna 1 campo específico do secret. Audit grava field_accessed=field."""
     result = await db.execute(select(Secret).where(Secret.slug == slug))
     secret = result.scalar_one_or_none()
     if not secret:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=f"Secret '{slug}' não encontrado")
 
-    vault = get_vault()
-    try:
-        plaintext = vault.decrypt(secret.encrypted_value)
-    except VaultError as e:
+    if field not in secret.field_keys:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            detail=(
+                f"Campo '{field}' não existe em '{slug}'. "
+                f"Disponíveis: {', '.join(secret.field_keys)}"
+            ),
+        )
+
+    fields = _decrypt_fields(secret)
+    value = fields.get(field)
+    if value is None:
+        # Inconsistência entre field_keys (cleartext) e o JSON descriptografado
         raise HTTPException(
             status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Falha de descriptografia: {e}",
-        ) from e
+            detail=f"Inconsistência: campo '{field}' listado mas ausente no blob",
+        )
 
     secret.last_accessed_at = datetime.now(timezone.utc)
-
-    # Parse task_id header se fornecido (skill scripts passam quando aplicável)
-    task_uuid: object | None = None
-    if x_task_id:
-        try:
-            import uuid as _uuid
-            task_uuid = _uuid.UUID(x_task_id)
-        except ValueError:
-            task_uuid = None
-
     await _log_access(
         db,
         secret_id=secret.id,
@@ -164,11 +216,45 @@ async def read_secret_value(
         action="read",
         user_id=user.id,
         skill=x_skill_slug or None,
-        task_id=task_uuid,
+        task_id=_parse_task_id(x_task_id),
         ip=_client_ip(request),
+        field_accessed=field,
     )
     await db.commit()
-    return SecretValueOut(slug=secret.slug, value=plaintext)
+    return SecretValueOut(slug=secret.slug, field=field, value=value)
+
+
+@router.get("/{slug}/values", response_model=SecretAllValuesOut)
+async def read_secret_all_values(
+    slug: str,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    x_skill_slug: str | None = Header(default=None, alias="X-Skill-Slug"),
+    x_task_id: str | None = Header(default=None, alias="X-Task-Id"),
+) -> SecretAllValuesOut:
+    """Retorna TODOS os campos descriptografados. Audit grava field_accessed=NULL."""
+    result = await db.execute(select(Secret).where(Secret.slug == slug))
+    secret = result.scalar_one_or_none()
+    if not secret:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=f"Secret '{slug}' não encontrado")
+
+    fields = _decrypt_fields(secret)
+
+    secret.last_accessed_at = datetime.now(timezone.utc)
+    await _log_access(
+        db,
+        secret_id=secret.id,
+        secret_slug=secret.slug,
+        action="read",
+        user_id=user.id,
+        skill=x_skill_slug or None,
+        task_id=_parse_task_id(x_task_id),
+        ip=_client_ip(request),
+        field_accessed=None,  # explícito: leu todos
+    )
+    await db.commit()
+    return SecretAllValuesOut(slug=secret.slug, fields=fields)
 
 
 @router.delete("/{slug}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
@@ -182,9 +268,9 @@ async def delete_secret(
     result = await db.execute(select(Secret).where(Secret.slug == slug))
     secret = result.scalar_one_or_none()
     if not secret:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=f"Secret '{slug}' não encontrado")
+        # Idempotente: já não existe = sucesso
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
-    secret_id = secret.id
     secret_slug = secret.slug
 
     await db.delete(secret)
@@ -208,10 +294,7 @@ async def secret_audit(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[SecretAccessLogOut]:
-    """Retorna até N entradas do audit log do secret (mais recentes primeiro).
-
-    Funciona mesmo se secret já foi deletado — usa slug como chave.
-    """
+    """Retorna até N entradas do audit log do secret (mais recentes primeiro)."""
     safe_limit = min(max(limit, 1), 500)
     result = await db.execute(
         select(SecretAccessLog)

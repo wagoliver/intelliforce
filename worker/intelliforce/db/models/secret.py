@@ -30,8 +30,16 @@ class Secret(Base, UUIDPrimaryKeyMixin):
     )
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
 
-    # Valor criptografado (Fernet retorna bytes urlsafe-base64; guardamos cru)
+    # Valor criptografado: Fernet sobre JSON `{"<field_key>": "<value>", ...}`.
+    # Pra single-field, é só {"<key>": "<value>"}; pra multi-field (Zoho, AWS,
+    # OAuth), todos os campos no mesmo blob → atualização atômica e cripto único.
     encrypted_value: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+
+    # Nomes dos campos do JSON acima — clear text (não-sensível). Permite
+    # listar sem descriptografar e validar `?field=X` antes de decifrar.
+    field_keys: Mapped[list[str]] = mapped_column(
+        ARRAY(String), nullable=False, server_default=sa.text("'{}'::varchar[]"),
+    )
 
     # Tags pra agrupar (ex: ["zoho", "prod"]). Postgres ARRAY de text.
     tags: Mapped[list[str]] = mapped_column(

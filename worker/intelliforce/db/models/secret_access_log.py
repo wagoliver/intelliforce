@@ -57,6 +57,9 @@ class SecretAccessLog(Base, UUIDPrimaryKeyMixin):
     # Tipo de ação: 'create' | 'read' | 'delete'
     action: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
 
+    # Qual campo foi acessado (multi-field). NULL = leu todos OR action != read.
+    field_accessed: Mapped[str | None] = mapped_column(String(128), nullable=True)
+
     accessed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_utcnow, index=True,
     )

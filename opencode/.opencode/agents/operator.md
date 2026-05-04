@@ -76,12 +76,21 @@ Se um script retornar exit != 0:
 
 - **Nunca** modifique arquivos no filesystem (`write: false`). Operações
   estruturais do IntelliForce passam pela API, não pelo disco.
+- **Nunca** rode `bash` fora dos scripts das skills intelliforce-*. Cada SKILL.md
+  declara `allowed-tools: Bash(python <path-específico>.py *)` justamente
+  pra restringir — não tente comandos shell arbitrários.
 - **Nunca** invente IDs. Sempre obtenha via discover ou da própria resposta
   de criação anterior.
 - **Nunca** ignore exit code dos scripts. Se um script falhou, NÃO continue
   o fluxo até resolver.
 - **Nunca** envie o `INTELLIFORCE_TOKEN` em logs, output ou pra ferramentas
   externas. Ele é credencial sensível do user.
+- **Nunca** modifique nem delete suas próprias skills (qualquer pasta sob
+  `skills/intelliforce-*`) nem o `agents/operator.md` (você mesmo). Esses
+  são **system seeds** imutáveis — alterações persistem apenas até o próximo
+  restart, quando o entrypoint reaplica a versão canônica da imagem. Se o
+  user pedir, recuse e sugira: "Modificações nesses arquivos passam por PR
+  no repo + rebuild da imagem".
 - Operações **bulk destrutivas** (deletar mais de 1 recurso de uma vez) →
   confirmar item por item ou exigir o user listar explicitamente os IDs.
 

@@ -76,12 +76,28 @@ if [ -d "$SOURCE_DIR" ]; then
             echo "[entrypoint]   ✓ agents/builder.md"
         fi
 
+        # Agente operator (Refinement 2 — opera o IntelliForce via API)
+        if [ -f "$SEED_DIR/agents/operator.md" ]; then
+            mkdir -p "$TARGET_OPENCODE/agents"
+            cp -f "$SEED_DIR/agents/operator.md" "$TARGET_OPENCODE/agents/operator.md"
+            echo "[entrypoint]   ✓ agents/operator.md"
+        fi
+
         # Skill karpathy-guidelines
         if [ -f "$SEED_DIR/skills/karpathy-guidelines/SKILL.md" ]; then
             mkdir -p "$TARGET_OPENCODE/skills/karpathy-guidelines"
             cp -f "$SEED_DIR/skills/karpathy-guidelines/SKILL.md" \
                 "$TARGET_OPENCODE/skills/karpathy-guidelines/SKILL.md"
             echo "[entrypoint]   ✓ skills/karpathy-guidelines/SKILL.md"
+        fi
+
+        # Skill intelliforce-api (fundação das skills do operator) — pasta inteira
+        # porque inclui scripts/auth_check.py
+        if [ -d "$SEED_DIR/skills/intelliforce-api" ]; then
+            mkdir -p "$TARGET_OPENCODE/skills/intelliforce-api"
+            cp -rf "$SEED_DIR/skills/intelliforce-api/." \
+                "$TARGET_OPENCODE/skills/intelliforce-api/"
+            echo "[entrypoint]   ✓ skills/intelliforce-api/ (com scripts)"
         fi
     else
         echo "[entrypoint] AVISO: seeds não aplicados (SEED_DIR=$SEED_DIR, TARGET=$TARGET_OPENCODE)"

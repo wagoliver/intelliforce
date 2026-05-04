@@ -42,7 +42,7 @@ export function useChatStream() {
   const abortRef = useRef<AbortController | null>(null);
 
   const send = useCallback(
-    async (prompt: string) => {
+    async (prompt: string, agent?: string) => {
       const trimmed = prompt.trim();
       if (!trimmed || state.isStreaming) return;
 
@@ -55,12 +55,18 @@ export function useChatStream() {
       const controller = new AbortController();
       abortRef.current = controller;
 
+      const payload: Record<string, unknown> = {
+        prompt: trimmed,
+        session_id: state.sessionId,
+      };
+      if (agent) payload.agent = agent;
+
       let res: Response;
       try {
         res = await fetch("/api/proxy/chat/stream", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt: trimmed, session_id: state.sessionId }),
+          body: JSON.stringify(payload),
           signal: controller.signal,
         });
       } catch (err) {

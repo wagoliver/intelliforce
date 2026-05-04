@@ -16,10 +16,16 @@ import {
 /**
  * Slugs imutáveis (system seeds). Frontend hardcoda enquanto a API não expõe
  * o campo `protected`. TODO: trocar por flag vinda do GET /opencode/tree.
+ *
+ * Inclui: agentes seed (builder, operator) + skill base do operator
+ * (intelliforce-api). As 10 skills intelliforce-* restantes serão adicionadas
+ * conforme cada fase do Refinement 2 entra em produção.
  */
 const SEED_KEYS = new Set<string>([
   "agent/builder",
+  "agent/operator",
   "skill/karpathy-guidelines",
+  "skill/intelliforce-api",
 ]);
 
 type Selected = { kind: OpenCodeFile["kind"]; slug: string } | null;

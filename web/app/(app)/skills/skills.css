@@ -758,6 +758,12 @@
   position: relative;
   z-index: 1;
 }
+.skills-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
 .skills-header-title {
   font-family: var(--font-display);
   font-size: 16px;
@@ -782,6 +788,42 @@
   font-size: 11.5px;
   color: var(--text-subtle);
   font-family: var(--font-mono);
+}
+
+/* ===== Agent switcher (Builder | Operator) ===== */
+.skills-agent-switcher {
+  display: inline-flex;
+  background: color-mix(in oklab, var(--bg-elev) 70%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.skills-agent-option {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-subtle);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 160ms ease, background 160ms ease, box-shadow 220ms ease;
+}
+.skills-agent-option:hover:not(:disabled):not(.skills-agent-option--active) {
+  color: var(--text);
+}
+.skills-agent-option--active {
+  background: linear-gradient(135deg, var(--accent-green), var(--accent-cyan));
+  color: oklch(0.13 0.01 250);
+  font-weight: 600;
+  box-shadow: 0 4px 14px color-mix(in oklab, var(--accent-green) 28%, transparent);
+}
+.skills-agent-option:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 /* =============================================================================

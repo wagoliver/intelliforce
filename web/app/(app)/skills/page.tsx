@@ -17,6 +17,15 @@ const SLIDE_UP = {
   visible: { opacity: 1, y: 0 },
 };
 
+type AgentKey = "operator" | "builder";
+
+const AGENT_OPTIONS: { key: AgentKey; label: string; tagline: string }[] = [
+  { key: "operator", label: "Operator", tagline: "opera o sistema · cria deps, employees, agenda" },
+  { key: "builder", label: "Builder", tagline: "constrói skills, agents, scripts" },
+];
+
+const AGENT_STORAGE_KEY = "skills.agent";
+
 export default function SkillsPage() {
   const { state, send, abort } = useChatStream();
   const { tree, loading: treeLoading, error: treeError, refetch } = useOpenCodeTree();
@@ -24,6 +33,20 @@ export default function SkillsPage() {
   const [selected, setSelected] = useState<{ kind: OpenCodeFile["kind"]; slug: string } | null>(null);
   const [collapsed, setCollapsed] = useState(false);
   const [recentlyCreated, setRecentlyCreated] = useState<Set<string>>(new Set());
+  const [agent, setAgent] = useState<AgentKey>("operator");
+
+  // Hidrata seleção de agente do localStorage
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = window.localStorage.getItem(AGENT_STORAGE_KEY);
+    if (stored === "operator" || stored === "builder") setAgent(stored);
+  }, []);
+
+  // Persiste seleção
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(AGENT_STORAGE_KEY, agent);
+  }, [agent]);
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const wasStreamingRef = useRef(false);
@@ -87,7 +110,7 @@ export default function SkillsPage() {
   function onSubmit(text?: string) {
     const value = (text ?? input).trim();
     if (!value || state.isStreaming) return;
-    void send(value);
+    void send(value, agent);
     setInput("");
   }
 
@@ -107,13 +130,33 @@ export default function SkillsPage() {
 
         <main className="skills-main">
           <header className="skills-header">
-            <h1 className="skills-header-title">
-              <span className="skills-header-dot" aria-hidden="true" />
-              Skill Studio
-            </h1>
-            <span className="skills-header-sub">
-              chat com OpenCode · agente builder · streaming em tempo real
-            </span>
+            <div className="skills-header-row">
+              <div>
+                <h1 className="skills-header-title">
+                  <span className="skills-header-dot" aria-hidden="true" />
+                  Skill Studio
+                </h1>
+                <span className="skills-header-sub">
+                  {AGENT_OPTIONS.find((a) => a.key === agent)?.tagline ?? ""}
+                </span>
+              </div>
+              <div className="skills-agent-switcher" role="tablist" aria-label="Selecionar agente">
+                {AGENT_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    role="tab"
+                    aria-selected={agent === opt.key}
+                    className={`skills-agent-option ${agent === opt.key ? "skills-agent-option--active" : ""}`}
+                    onClick={() => !state.isStreaming && setAgent(opt.key)}
+                    disabled={state.isStreaming}
+                    title={opt.tagline}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </header>
 
           {state.messages.length === 0 && !state.isStreaming ? (

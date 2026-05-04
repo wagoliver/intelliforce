@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
@@ -164,6 +165,7 @@ class OpenCodeRunner:
         continue_session: bool = False,
         timeout_seconds: int | None = None,
         extra_args: list[str] | None = None,
+        extra_env: dict[str, str] | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         """Executa OpenCode e yielda cada linha NDJSON do stdout em tempo real.
 
@@ -176,6 +178,10 @@ class OpenCodeRunner:
           - {"type": "stream_error", "error": str}                          (em caso de exceção)
 
         Esses eventos sintéticos têm o prefixo "stream_" pra não colidir com os tipos do CLI.
+
+        `extra_env`: env vars adicionais propagadas pro subprocess. Usado pra
+        passar credenciais (INTELLIFORCE_TOKEN) e config (INTELLIFORCE_API_URL)
+        pros scripts Python das skills sem expor no command line.
         """
         cmd = self._build_command(
             prompt=prompt,
@@ -186,8 +192,15 @@ class OpenCodeRunner:
             extra_args=extra_args,
         )
         timeout = timeout_seconds or self.default_timeout_seconds
+        env = {**os.environ, **(extra_env or {})}
 
-        log.info("opencode.cli_stream_start", command=cmd, cwd=self.config_path, timeout=timeout)
+        log.info(
+            "opencode.cli_stream_start",
+            command=cmd,
+            cwd=self.config_path,
+            timeout=timeout,
+            extra_env_keys=list((extra_env or {}).keys()),
+        )
         start = time.monotonic()
 
         proc: asyncio.subprocess.Process | None = None
@@ -197,6 +210,7 @@ class OpenCodeRunner:
                 cwd=self.config_path,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                env=env,
             )
 
             yield {"type": "stream_start", "command": cmd}

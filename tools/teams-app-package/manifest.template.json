@@ -1,0 +1,52 @@
+{
+  "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.16/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.16",
+  "version": "1.0.0",
+  "id": "__TEAMS_APP_ID__",
+  "developer": {
+    "name": "Arctica Serviços TM",
+    "websiteUrl": "https://arctica.com.br",
+    "privacyUrl": "https://arctica.com.br/privacidade",
+    "termsOfUseUrl": "https://arctica.com.br/termos"
+  },
+  "name": {
+    "short": "IntelliForce",
+    "full": "IntelliForce Digital Workforce"
+  },
+  "description": {
+    "short": "Workforce digital — notificações automatizadas",
+    "full": "IntelliForce posta notificações e aprovações em canais do Microsoft Teams a partir de skills automatizadas (estoque, SLA, monitoramento). Lê e responde mensagens via Microsoft Graph com autenticação application."
+  },
+  "icons": {
+    "color": "color.png",
+    "outline": "outline.png"
+  },
+  "accentColor": "#16a34a",
+  "webApplicationInfo": {
+    "id": "__AZURE_CLIENT_ID__",
+    "resource": "api://intelliforce-teams"
+  },
+  "authorization": {
+    "permissions": {
+      "resourceSpecific": [
+        {
+          "name": "ChannelMessage.Send.Group",
+          "type": "Application"
+        },
+        {
+          "name": "ChannelMessage.Read.Group",
+          "type": "Application"
+        },
+        {
+          "name": "TeamSettings.Read.Group",
+          "type": "Application"
+        },
+        {
+          "name": "ChannelSettings.Read.Group",
+          "type": "Application"
+        }
+      ]
+    }
+  },
+  "validDomains": []
+}

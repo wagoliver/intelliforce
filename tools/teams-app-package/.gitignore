@@ -1,0 +1,5 @@
+# Artefatos gerados pelo make-package.py — não commitar:
+# zip carrega client_id, ícones são regenerados a cada run
+intelliforce-teams.zip
+color.png
+outline.png

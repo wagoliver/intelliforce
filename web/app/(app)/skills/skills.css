@@ -529,8 +529,12 @@
  * Composer (input + botão)
  * ============================================================================= */
 
-.skills-composer {
+.skills-composer-wrapper {
   margin: 0 32px 24px;
+  position: relative;
+}
+
+.skills-composer {
   position: relative;
   border-radius: 14px;
   padding: 1px;  /* espessura da border gradient */
@@ -936,6 +940,116 @@
   border-top: 1px dashed color-mix(in oklab, var(--danger) 40%, var(--border));
   padding-top: 6px;
   margin-top: 4px;
+}
+
+/* =============================================================================
+ * Slash command palette — dropdown sobre o composer
+ * ============================================================================= */
+
+.skills-slash-palette {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  background: color-mix(in oklab, var(--bg-elev) 95%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.45),
+    0 0 0 1px color-mix(in oklab, var(--accent-green) 18%, transparent);
+  backdrop-filter: blur(14px);
+  z-index: 30;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.skills-slash-list {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.skills-slash-item {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+  position: relative;
+}
+.skills-slash-item:hover,
+.skills-slash-item--active {
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--accent-green) 14%, transparent),
+    color-mix(in oklab, var(--accent-cyan) 8%, transparent)
+  );
+}
+.skills-slash-item--active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, var(--accent-green), var(--accent-cyan));
+  box-shadow: 0 0 8px var(--accent-green);
+}
+
+.skills-slash-label {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--accent-green);
+  flex-shrink: 0;
+  min-width: 110px;
+}
+.skills-slash-item--active .skills-slash-label,
+.skills-slash-item:hover .skills-slash-label {
+  color: var(--text);
+}
+
+.skills-slash-desc {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.skills-slash-item--active .skills-slash-desc,
+.skills-slash-item:hover .skills-slash-desc {
+  color: var(--text);
+}
+
+.skills-slash-footer {
+  display: flex;
+  gap: 14px;
+  padding: 7px 12px;
+  border-top: 1px solid var(--border);
+  background: color-mix(in oklab, var(--bg) 50%, transparent);
+  font-size: 11px;
+  color: var(--text-subtle);
+  font-family: var(--font-mono);
+}
+.skills-slash-footer kbd {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  margin: 0 3px 0 0;
+  font-size: 10px;
+  font-family: inherit;
+  color: var(--text-muted);
 }
 
 /* =============================================================================

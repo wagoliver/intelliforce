@@ -1,15 +1,17 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { EmptyState } from "./components/EmptyState";
 import { FileTree } from "./components/FileTree";
 import { MarkdownView } from "./components/MarkdownView";
 import { SkillDrawer } from "./components/SkillDrawer";
+import { SlashPalette } from "./components/SlashPalette";
 import { useChatStream } from "./hooks/useChatStream";
 import { useOpenCodeTree, type OpenCodeFile, type OpenCodeTree } from "./hooks/useOpenCodeTree";
 import { useReducedMotion } from "./hooks/useReducedMotion";
+import { commandsForAgent, filterCommands, type SlashCommand } from "./state/slash-commands";
 import type { ChatMessage, ThinkingLine, ToolCall } from "./state/types";
 
 const SLIDE_UP = {
@@ -49,10 +51,31 @@ export default function SkillsPage() {
   }, [agent]);
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const wasStreamingRef = useRef(false);
   const refetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevTreeKeysRef = useRef<Set<string>>(new Set());
   const reducedMotion = useReducedMotion();
+
+  // Slash palette — abre quando input começa com "/"
+  const [slashIndex, setSlashIndex] = useState(0);
+  const slashOpen = input.startsWith("/");
+  const slashQuery = slashOpen ? input.slice(1).split(/\s/)[0] : "";
+  const slashCommands = useMemo(() => {
+    if (!slashOpen) return [];
+    return filterCommands(commandsForAgent(agent), slashQuery);
+  }, [slashOpen, slashQuery, agent]);
+
+  // Reset highlighted ao mudar comandos disponíveis
+  useEffect(() => {
+    setSlashIndex(0);
+  }, [slashQuery, agent]);
+
+  function applySlashCommand(cmd: SlashCommand) {
+    setInput(cmd.template);
+    setSlashIndex(0);
+    setTimeout(() => inputRef.current?.focus(), 0);
+  }
 
   // auto-scroll
   useEffect(() => {
@@ -134,7 +157,7 @@ export default function SkillsPage() {
               <div>
                 <h1 className="skills-header-title">
                   <span className="skills-header-dot" aria-hidden="true" />
-                  Skill Studio
+                  Command Center
                 </h1>
                 <span className="skills-header-sub">
                   {AGENT_OPTIONS.find((a) => a.key === agent)?.tagline ?? ""}
@@ -178,24 +201,66 @@ export default function SkillsPage() {
             </div>
           )}
 
-          <div className="skills-composer">
-            <div className="skills-composer-inner">
-              <input
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    onSubmit();
+          <div className="skills-composer-wrapper">
+            <SlashPalette
+              open={slashOpen && slashCommands.length > 0 && !state.isStreaming}
+              commands={slashCommands}
+              highlightedIndex={Math.min(slashIndex, Math.max(0, slashCommands.length - 1))}
+              onSelect={applySlashCommand}
+              onHover={(i) => setSlashIndex(i)}
+            />
+            <div className="skills-composer">
+              <div className="skills-composer-inner">
+                <input
+                  ref={inputRef}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    // Slash palette ativo: setas/Enter/Esc cuidam do palette
+                    if (slashOpen && slashCommands.length > 0) {
+                      if (e.key === "ArrowDown") {
+                        e.preventDefault();
+                        setSlashIndex((i) => (i + 1) % slashCommands.length);
+                        return;
+                      }
+                      if (e.key === "ArrowUp") {
+                        e.preventDefault();
+                        setSlashIndex((i) => (i - 1 + slashCommands.length) % slashCommands.length);
+                        return;
+                      }
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        const safeIdx = Math.min(slashIndex, slashCommands.length - 1);
+                        applySlashCommand(slashCommands[safeIdx]);
+                        return;
+                      }
+                      if (e.key === "Escape") {
+                        e.preventDefault();
+                        setInput("");
+                        return;
+                      }
+                      if (e.key === "Tab") {
+                        e.preventDefault();
+                        const safeIdx = Math.min(slashIndex, slashCommands.length - 1);
+                        applySlashCommand(slashCommands[safeIdx]);
+                        return;
+                      }
+                    }
+                    // Sem palette: Enter envia
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      onSubmit();
+                    }
+                  }}
+                  placeholder={
+                    state.isStreaming
+                      ? "OpenCode trabalhando…"
+                      : "O que você quer construir? (digite / para comandos)"
                   }
-                }}
-                placeholder={
-                  state.isStreaming ? "OpenCode trabalhando…" : "O que você quer construir?"
-                }
-                disabled={state.isStreaming}
-                className="skills-composer-input"
-                aria-label="Mensagem para o OpenCode"
-              />
+                  disabled={state.isStreaming}
+                  className="skills-composer-input"
+                  aria-label="Mensagem para o OpenCode"
+                />
               {state.isStreaming ? (
                 <button
                   type="button"
@@ -215,6 +280,7 @@ export default function SkillsPage() {
                   Enviar
                 </button>
               )}
+              </div>
             </div>
           </div>
 

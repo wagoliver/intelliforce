@@ -177,21 +177,19 @@ def _graph(
 # Resolvers (nome → ID)
 # ─────────────────────────────────────────────────────────────────────────────
 def _resolve_team_id(token: str, name_or_id: str) -> str:
-    """Aceita UUID ou nome. Se UUID, retorna direto. Se nome, busca."""
+    """Aceita UUID ou nome. Se UUID, retorna direto. Se nome, busca via /teams."""
     if _looks_like_uuid(name_or_id):
         return name_or_id
+    # /teams (Team.ReadBasic.All) — endpoint específico de Teams.
+    # Evita /groups que exigiria Group.Read.All adicional.
     data = _graph(
-        "GET", "/groups", token,
-        params={
-            "$filter": "resourceProvisioningOptions/Any(x:x eq 'Team')",
-            "$select": "id,displayName",
-            "$top": 100,
-        },
+        "GET", "/teams", token,
+        params={"$top": 100, "$select": "id,displayName"},
     )
-    for g in (data or {}).get("value", []):
-        if g.get("displayName", "").strip().lower() == name_or_id.strip().lower():
-            return g["id"]
-    available = [g.get("displayName") for g in (data or {}).get("value", [])]
+    for t in (data or {}).get("value", []):
+        if t.get("displayName", "").strip().lower() == name_or_id.strip().lower():
+            return t["id"]
+    available = [t.get("displayName") for t in (data or {}).get("value", [])]
     print(
         f"TEAM_NOT_FOUND: '{name_or_id}'. Disponíveis: {available}",
         file=sys.stderr,
@@ -349,17 +347,15 @@ def cmd_listen(args: argparse.Namespace) -> int:
 def cmd_list_teams(args: argparse.Namespace) -> int:
     creds = _get_credentials(args.skill)
     token = _get_access_token(creds)
+    # GET /teams requer Team.ReadBasic.All (Application). Mais barato que
+    # GET /groups com filter (que exigiria Group.Read.All).
     data = _graph(
-        "GET", "/groups", token,
-        params={
-            "$filter": "resourceProvisioningOptions/Any(x:x eq 'Team')",
-            "$select": "id,displayName,description",
-            "$top": 100,
-        },
+        "GET", "/teams", token,
+        params={"$top": 100, "$select": "id,displayName,description"},
     )
     teams = [
-        {"id": g["id"], "name": g.get("displayName", ""), "description": g.get("description", "")}
-        for g in (data or {}).get("value", [])
+        {"id": t["id"], "name": t.get("displayName", ""), "description": t.get("description", "")}
+        for t in (data or {}).get("value", [])
     ]
     print(json.dumps(teams, indent=2, ensure_ascii=False))
     return 0

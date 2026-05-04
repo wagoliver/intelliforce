@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { AskForm, type AskQuestion } from "./components/AskForm";
 import { EmptyState } from "./components/EmptyState";
 import { FileTree } from "./components/FileTree";
 import { MarkdownView } from "./components/MarkdownView";
@@ -176,6 +177,23 @@ export default function SkillsPage() {
     setInput("");
   }
 
+  // Callbacks dos AskForms inline nas mensagens do agente
+  function handleAskSubmit(answers: { id: string; label: string; value: string }[]) {
+    if (state.isStreaming) return;
+    const consolidated = answers.map((a) => `**${a.label}**: ${a.value}`).join("\n");
+    void send(consolidated, agent);
+  }
+  function handleAskCancel() {
+    if (state.isStreaming) return;
+    void send(
+      "Cancelei o questionário. Pode prosseguir sem essas informações ou vamos mudar de assunto.",
+      agent,
+    );
+  }
+  function handleAskFreeForm() {
+    setTimeout(() => inputRef.current?.focus(), 0);
+  }
+
   return (
     <>
       <div className="skills-content">
@@ -227,7 +245,14 @@ export default function SkillsPage() {
             <div ref={scrollRef} className="skills-chat" role="log" aria-live="polite" aria-atomic="false">
               <AnimatePresence initial={false}>
                 {state.messages.map((m) => (
-                  <MessageBubble key={m.id} message={m} reducedMotion={reducedMotion} />
+                  <MessageBubble
+                    key={m.id}
+                    message={m}
+                    reducedMotion={reducedMotion}
+                    onAskSubmit={handleAskSubmit}
+                    onAskCancel={handleAskCancel}
+                    onAskFreeForm={handleAskFreeForm}
+                  />
                 ))}
               </AnimatePresence>
               {state.isStreaming && <div className="skills-thinking">OpenCode está pensando…</div>}
@@ -334,8 +359,55 @@ export default function SkillsPage() {
   );
 }
 
-function MessageBubble({ message, reducedMotion }: { message: ChatMessage; reducedMotion: boolean }) {
+type AgentPart =
+  | { type: "markdown"; content: string }
+  | { type: "ask"; questions: AskQuestion[] };
+
+/**
+ * Quebra o texto da mensagem do agente em partes — markdown normal + blocos
+ * ```ask que viram <AskForm>. Block parcial (sem fechar) é tratado como
+ * markdown (vai aparecer como code block aberto até completar no streaming).
+ */
+function splitAgentMessage(source: string): AgentPart[] {
+  const re = /```ask\s*\n([\s\S]*?)\n```/g;
+  const parts: AgentPart[] = [];
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(source)) !== null) {
+    if (m.index > last) parts.push({ type: "markdown", content: source.slice(last, m.index) });
+    try {
+      const parsed = JSON.parse(m[1]);
+      if (Array.isArray(parsed)) {
+        parts.push({ type: "ask", questions: parsed as AskQuestion[] });
+      } else {
+        parts.push({ type: "markdown", content: m[0] });
+      }
+    } catch {
+      parts.push({ type: "markdown", content: m[0] });
+    }
+    last = re.lastIndex;
+  }
+  if (last < source.length) parts.push({ type: "markdown", content: source.slice(last) });
+  if (parts.length === 0) parts.push({ type: "markdown", content: source });
+  return parts;
+}
+
+function MessageBubble({
+  message,
+  reducedMotion,
+  onAskSubmit,
+  onAskCancel,
+  onAskFreeForm,
+}: {
+  message: ChatMessage;
+  reducedMotion: boolean;
+  onAskSubmit: (a: { id: string; label: string; value: string }[]) => void;
+  onAskCancel: () => void;
+  onAskFreeForm: () => void;
+}) {
   const isUser = message.role === "user";
+  const agentParts = !isUser && message.text ? splitAgentMessage(message.text) : null;
+
   return (
     <motion.div
       className={`skills-bubble ${isUser ? "skills-bubble--user" : "skills-bubble--agent"}`}
@@ -364,12 +436,22 @@ function MessageBubble({ message, reducedMotion }: { message: ChatMessage; reduc
         </div>
       )}
 
-      {message.text && (
-        isUser ? (
-          <div className="skills-bubble-text">{message.text}</div>
+      {isUser && message.text && (
+        <div className="skills-bubble-text">{message.text}</div>
+      )}
+
+      {!isUser && agentParts?.map((p, i) =>
+        p.type === "markdown" ? (
+          <MarkdownView key={i} source={p.content} variant="bubble" />
         ) : (
-          <MarkdownView source={message.text} variant="bubble" />
-        )
+          <AskForm
+            key={i}
+            questions={p.questions}
+            onSubmit={onAskSubmit}
+            onCancel={onAskCancel}
+            onSwitchToFreeForm={onAskFreeForm}
+          />
+        ),
       )}
 
       {!isUser && message.error && (

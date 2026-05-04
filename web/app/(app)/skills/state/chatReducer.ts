@@ -33,14 +33,47 @@ function updateLastAgentMessage(
  * Defesa em profundidade: força TODAS as agent messages com isStreaming=true
  * pra finalizado. Resolve estado órfão quando abort/error/network anomalia
  * deixa bolhas antigas com spinner girando eternamente.
+ *
+ * Também fecha tool calls ainda em "running" — o CLI pode terminar o turn
+ * sem emitir TOOL_CALL_FINISHED pra cada tool (tool morreu junto com o
+ * processo), e elas ficariam com spinner + cronômetro contando pra sempre.
+ *
+ * Status das tools "running" → "done" no AGENT_TURN_FINISHED, ou "error"
+ * em ERROR (passa via parâmetro `markToolsAs`).
  */
-function closeAllStreaming(messages: ChatMessage[]): ChatMessage[] {
+function closeAllStreaming(
+  messages: ChatMessage[],
+  markToolsAs: "done" | "error" = "done",
+): ChatMessage[] {
   let changed = false;
   const now = Date.now();
   const next = messages.map((m) => {
-    if (m.role === "agent" && m.isStreaming) {
+    if (m.role !== "agent") return m;
+
+    let updated = m;
+    let touched = false;
+
+    if (m.isStreaming) {
+      updated = { ...updated, isStreaming: false, finishedAt: m.finishedAt ?? now };
+      touched = true;
+    }
+
+    const hasRunningTool = m.toolCalls.some((tc) => tc.status === "running");
+    if (hasRunningTool) {
+      updated = {
+        ...updated,
+        toolCalls: m.toolCalls.map((tc) =>
+          tc.status === "running"
+            ? { ...tc, status: markToolsAs, finishedAt: tc.finishedAt ?? now }
+            : tc,
+        ),
+      };
+      touched = true;
+    }
+
+    if (touched) {
       changed = true;
-      return { ...m, isStreaming: false, finishedAt: m.finishedAt ?? now };
+      return updated;
     }
     return m;
   });
@@ -145,6 +178,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
     }
     case "ERROR": {
       // Marca a última agent message com erro + fecha TODAS streaming.
+      // Tools órfãs viram "error" (não "done") pra refletir o stream falhou.
       const last = lastAgentMessage(state.messages);
       let messages = state.messages;
       if (last) {
@@ -153,7 +187,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
           error: action.error,
         }));
       }
-      messages = closeAllStreaming(messages);
+      messages = closeAllStreaming(messages, "error");
       return {
         ...state,
         isStreaming: false,

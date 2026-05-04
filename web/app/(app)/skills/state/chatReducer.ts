@@ -159,7 +159,12 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
           ...m,
           thinkingLines: [
             ...m.thinkingLines,
-            { id: action.id, kind: action.kind, label: action.label },
+            {
+              id: action.id,
+              kind: action.kind,
+              label: action.label,
+              fullText: action.fullText,
+            },
           ],
         })),
       };

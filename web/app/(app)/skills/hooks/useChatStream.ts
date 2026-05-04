@@ -255,6 +255,7 @@ function mapEventToAction(event: any): ChatAction | ChatAction[] | null {
       id: genId(),
       kind: "reasoning",
       label: txt.slice(0, 200),
+      fullText: txt,         // mantém texto completo pra reveal no colapse
     };
   }
 

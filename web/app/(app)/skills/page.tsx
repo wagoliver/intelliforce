@@ -486,6 +486,18 @@ function MessageBubble({
 }) {
   const isUser = message.role === "user";
   const agentParts = !isUser && message.text ? splitAgentMessage(message.text) : null;
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopy() {
+    if (isUser || !message.text) return;
+    try {
+      await navigator.clipboard.writeText(message.text);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* user pode selecionar manual */
+    }
+  }
 
   return (
     <motion.div
@@ -509,22 +521,40 @@ function MessageBubble({
         <LiveStatus message={message} reducedMotion={reducedMotion} />
       )}
 
-      {!isUser && (message.toolCalls.length > 0 || message.thinkingLines.length > 0) && (
-        <div className="skills-process">
-          <AnimatePresence initial={false}>
-            {message.toolCalls.map((tc, i) => (
-              <ToolCallLine key={`tool-${tc.id}`} call={tc} index={i} reducedMotion={reducedMotion} />
-            ))}
-            {message.thinkingLines.map((tl, i) => (
-              <ThinkingLineRow
-                key={`think-${tl.id}`}
-                line={tl}
-                index={i + message.toolCalls.length}
-                reducedMotion={reducedMotion}
-              />
-            ))}
-          </AnimatePresence>
-        </div>
+      {!isUser && message.role === "agent" && (
+        (() => {
+          const reasoningLines = message.thinkingLines.filter((tl) => tl.kind === "reasoning");
+          const otherLines = message.thinkingLines.filter((tl) => tl.kind !== "reasoning");
+          const hasContent =
+            message.toolCalls.length > 0 ||
+            otherLines.length > 0 ||
+            reasoningLines.length > 0;
+          if (!hasContent) return null;
+          return (
+            <div className="skills-process">
+              <AnimatePresence initial={false}>
+                {message.toolCalls.map((tc, i) => (
+                  <ToolCallLine key={`tool-${tc.id}`} call={tc} index={i} reducedMotion={reducedMotion} />
+                ))}
+                {otherLines.map((tl, i) => (
+                  <ThinkingLineRow
+                    key={`think-${tl.id}`}
+                    line={tl}
+                    index={i + message.toolCalls.length}
+                    reducedMotion={reducedMotion}
+                  />
+                ))}
+              </AnimatePresence>
+              {reasoningLines.length > 0 && (
+                <ReasoningStream
+                  lines={reasoningLines}
+                  isStreaming={message.isStreaming}
+                  reducedMotion={reducedMotion}
+                />
+              )}
+            </div>
+          );
+        })()
       )}
 
       {isUser && message.text && (
@@ -543,6 +573,36 @@ function MessageBubble({
             onSwitchToFreeForm={onAskFreeForm}
           />
         ),
+      )}
+
+      {!isUser && message.role === "agent" && !message.isStreaming && message.text && (
+        <div className="skills-bubble-actions" aria-label="Ações da resposta">
+          <button
+            type="button"
+            className="skills-bubble-action"
+            onClick={handleCopy}
+            title={copied ? "Copiado!" : "Copiar resposta"}
+          >
+            {copied ? (
+              <svg width={12} height={12} viewBox="0 0 16 16" aria-hidden="true">
+                <path
+                  d="M3.5 8.5l3 3 6-6"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  fill="none"
+                />
+              </svg>
+            ) : (
+              <svg width={12} height={12} viewBox="0 0 16 16" aria-hidden="true">
+                <rect x="4" y="4" width="8" height="9" rx="1.2" stroke="currentColor" strokeWidth="1.4" fill="none" />
+                <path d="M6 4V3a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-1" stroke="currentColor" strokeWidth="1.4" fill="none" strokeLinecap="round" />
+              </svg>
+            )}
+            <span>{copied ? "Copiado" : "Copiar"}</span>
+          </button>
+        </div>
       )}
 
       {!isUser && message.error && (
@@ -752,6 +812,111 @@ function LiveSpinner({ reducedMotion }: { reducedMotion: boolean }) {
         strokeLinecap="round"
       />
     </svg>
+  );
+}
+
+/**
+ * Stream de reasoning chunks com efeito de fila — mostra os 5 mais recentes.
+ *
+ * Durante streaming:
+ *   - Limita a 5 linhas visíveis
+ *   - Linha mais antiga (topo) tem opacity baixa (~0.2), mais nova (base) tem 1.0
+ *   - Quando chega chunk novo, antigas deslizam pra cima e somem (framer-motion
+ *     layout="position" cuida do movimento)
+ *
+ * Após streaming terminar:
+ *   - Colapsa automaticamente em "💭 ver pensamento (N chunks)"
+ *   - Click expande lista completa (todos os chunks com fullText)
+ */
+function ReasoningStream({
+  lines,
+  isStreaming,
+  reducedMotion,
+}: {
+  lines: ThinkingLine[];
+  isStreaming: boolean;
+  reducedMotion: boolean;
+}) {
+  const [expandedAfterFinish, setExpandedAfterFinish] = useState(false);
+
+  // Durante streaming: mostra os 5 mais recentes com fila + alpha
+  if (isStreaming) {
+    const visible = lines.slice(-5); // 5 mais recentes
+    const total = visible.length;
+    return (
+      <div className="skills-reasoning-stream" aria-live="polite">
+        <AnimatePresence initial={false} mode="popLayout">
+          {visible.map((tl, idx) => {
+            // idx 0 = mais antiga visível (topo), idx total-1 = mais nova (base).
+            // Alpha cresce com idx.
+            const alpha = total === 1 ? 1 : 0.2 + 0.8 * (idx / (total - 1));
+            return (
+              <motion.div
+                key={tl.id}
+                layout="position"
+                className="skills-reasoning-line"
+                initial={
+                  reducedMotion
+                    ? { opacity: alpha, y: 0 }
+                    : { opacity: 0, y: 12 }
+                }
+                animate={{ opacity: alpha, y: 0 }}
+                exit={
+                  reducedMotion
+                    ? { opacity: 0 }
+                    : { opacity: 0, y: -12, height: 0, marginTop: 0, marginBottom: 0 }
+                }
+                transition={{
+                  duration: reducedMotion ? 0 : 0.28,
+                  ease: [0.32, 0.72, 0, 1],
+                }}
+              >
+                <span className="skills-reasoning-kind">reasoning</span>
+                <span className="skills-reasoning-label">{tl.label}</span>
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
+      </div>
+    );
+  }
+
+  // Após terminar: bloco colapsável
+  return (
+    <div className="skills-reasoning-collapsed">
+      <button
+        type="button"
+        className="skills-reasoning-toggle"
+        onClick={() => setExpandedAfterFinish((v) => !v)}
+        aria-expanded={expandedAfterFinish}
+      >
+        <span className="skills-reasoning-toggle-icon" aria-hidden="true">
+          {expandedAfterFinish ? "▾" : "▸"}
+        </span>
+        <span className="skills-reasoning-toggle-label">
+          💭 {lines.length === 1
+            ? "Ver pensamento (1 chunk)"
+            : `Ver pensamento (${lines.length} chunks)`}
+        </span>
+      </button>
+      {expandedAfterFinish && (
+        <motion.div
+          className="skills-reasoning-expanded"
+          initial={reducedMotion ? { opacity: 1 } : { opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: "auto" }}
+          transition={{ duration: reducedMotion ? 0 : 0.22 }}
+        >
+          {lines.map((tl) => (
+            <div key={tl.id} className="skills-reasoning-line skills-reasoning-line--full">
+              <span className="skills-reasoning-kind">reasoning</span>
+              <span className="skills-reasoning-label">
+                {tl.fullText || tl.label}
+              </span>
+            </div>
+          ))}
+        </motion.div>
+      )}
+    </div>
   );
 }
 

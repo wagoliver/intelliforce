@@ -17,6 +17,7 @@ export type ThinkingLine = {
   id: string;
   kind: string;          // tipo do evento (ex: "reasoning", "step", "status")
   label: string;         // texto curto pra exibição (já truncado)
+  fullText?: string;     // texto completo (sem trunc) pra exibir no reveal
 };
 
 export type ChatMessage =
@@ -50,7 +51,7 @@ export type ChatAction =
   | { type: "TEXT_DELTA"; text: string }
   | { type: "TOOL_CALL_STARTED"; id: string; tool: string; description: string }
   | { type: "TOOL_CALL_FINISHED"; id: string; status: "done" | "error" }
-  | { type: "THINKING_LINE"; id: string; kind: string; label: string }
+  | { type: "THINKING_LINE"; id: string; kind: string; label: string; fullText?: string }
   | { type: "SESSION_ID"; sessionId: string }
   | { type: "AGENT_TURN_FINISHED" }
   | { type: "ERROR"; error: string };

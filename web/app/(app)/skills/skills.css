@@ -1108,6 +1108,178 @@
 
 .skills-process { display: flex; flex-direction: column; gap: 4px; }
 
+/* =============================================================================
+ * Hierarquia: separa visualmente process pane (tools+reasoning) da resposta
+ * ============================================================================= */
+
+/* Quando há process pane + markdown depois, separador sutil entre os dois */
+.skills-bubble--agent .skills-process + .skills-markdown--bubble,
+.skills-bubble--agent .skills-process + .skills-bubble-text {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid color-mix(in oklab, var(--accent-green) 25%, var(--border));
+  position: relative;
+}
+.skills-bubble--agent .skills-process + .skills-markdown--bubble::before,
+.skills-bubble--agent .skills-process + .skills-bubble-text::before {
+  content: "▾ resposta";
+  position: absolute;
+  top: -8px;
+  left: 0;
+  background: var(--bg-elev);
+  padding: 0 8px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent-green);
+}
+
+/* Markdown da resposta um pouco mais "presente" */
+.skills-bubble--agent .skills-markdown--bubble {
+  font-size: 14.5px;
+  color: var(--text);
+}
+.skills-bubble--agent .skills-markdown--bubble strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* =============================================================================
+ * Bubble actions — copiar, regenerar (no rodapé da bolha do agente)
+ * ============================================================================= */
+
+.skills-bubble-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px dashed color-mix(in oklab, var(--border) 70%, transparent);
+  opacity: 0.55;
+  transition: opacity 160ms ease;
+}
+.skills-bubble--agent:hover .skills-bubble-actions {
+  opacity: 1;
+}
+
+.skills-bubble-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 140ms ease;
+}
+.skills-bubble-action:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--accent-green) 8%, transparent);
+  border-color: color-mix(in oklab, var(--accent-green) 35%, var(--border));
+  color: var(--accent-green);
+}
+.skills-bubble-action:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* =============================================================================
+ * Reasoning stream — fila de 5 linhas com gradient alpha (mais antigas fadeam)
+ * ============================================================================= */
+
+.skills-reasoning-stream {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 0 4px;
+  margin-top: 4px;
+  border-top: 1px dashed color-mix(in oklab, var(--accent-cyan) 25%, var(--border));
+  /* Cap visual — mesmo se 5 linhas longas, não estoura layout */
+  max-height: 130px;
+  overflow: hidden;
+}
+
+.skills-reasoning-line {
+  display: flex;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-style: italic;
+  color: var(--accent-cyan);
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.skills-reasoning-line--full {
+  white-space: normal;       /* expandido — quebra linha */
+  align-items: flex-start;
+}
+
+.skills-reasoning-kind {
+  flex-shrink: 0;
+  text-transform: lowercase;
+  font-weight: 500;
+  opacity: 0.7;
+}
+
+.skills-reasoning-label {
+  flex: 1;
+  color: var(--text);
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+.skills-reasoning-line--full .skills-reasoning-label {
+  white-space: normal;
+}
+
+/* Estado colapsado (após streaming) */
+.skills-reasoning-collapsed {
+  margin-top: 6px;
+  border-top: 1px dashed color-mix(in oklab, var(--accent-cyan) 20%, var(--border));
+  padding-top: 6px;
+}
+
+.skills-reasoning-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: transparent;
+  border: 1px solid color-mix(in oklab, var(--accent-cyan) 25%, var(--border));
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 140ms ease;
+}
+.skills-reasoning-toggle:hover {
+  background: color-mix(in oklab, var(--accent-cyan) 8%, transparent);
+  border-color: color-mix(in oklab, var(--accent-cyan) 45%, var(--border));
+  color: var(--text);
+}
+
+.skills-reasoning-toggle-icon {
+  font-size: 10px;
+  color: var(--accent-cyan);
+}
+
+.skills-reasoning-expanded {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  background: color-mix(in oklab, var(--accent-cyan) 4%, transparent);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
 .skills-thinking-line {
   display: flex;
   align-items: center;

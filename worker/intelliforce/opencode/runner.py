@@ -337,6 +337,11 @@ class OpenCodeRunner:
             "run",
             "--format", "json",
             "--dangerously-skip-permissions",
+            # Emite reasoning/thinking chunks como eventos NDJSON separados.
+            # Sem isso, o modelo "pensa" silenciosamente (visível só nos
+            # tokens.reasoning do step_finish, mas sem conteúdo). Com a flag,
+            # o frontend pode renderizar o raciocínio em tempo real.
+            "--thinking",
         ]
         if agent:
             cmd.extend(["--agent", agent])

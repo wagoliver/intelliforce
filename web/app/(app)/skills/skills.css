@@ -1,10 +1,62 @@
 /* =============================================================================
- * Skills canvas — tema dark dedicado da rota /skills.
- * Tokens escopados em .skills-canvas pra não vazar pra outras telas.
+ * Skills canvas — tokens escopados, suportam light + dark.
+ *
+ * Default = LIGHT (sem .dark no <html>).
+ * Override DARK quando .dark ou [data-theme="dark"] está no html
+ * (mesmo padrão usado em globals.css com toggle pelo user-menu).
+ *
+ * Mantém os mesmos NOMES de tokens em ambos os themes — qualquer regra
+ * mais abaixo no arquivo continua funcionando porque referencia via var().
  * ============================================================================= */
 
 .skills-canvas {
-  /* Override base tokens herdados de globals.css */
+  /* ── LIGHT (default) ────────────────────────────────────────────────────── */
+  --bg: oklch(0.985 0.003 250);
+  --bg-elev: oklch(1 0 0);              /* branco puro pra cards/bolhas */
+  --bg-sunken: oklch(0.96 0.005 250);
+  --bg-hover: oklch(0.93 0.008 255);
+  --bg-panel: oklch(1 0 0);
+
+  --border: oklch(0.88 0.005 255);
+  --border-strong: oklch(0.78 0.01 255);
+
+  --text: oklch(0.20 0.015 255);        /* quase preto */
+  --text-muted: oklch(0.45 0.02 255);
+  --text-subtle: oklch(0.62 0.012 255);
+
+  /* Brand verde/cyan: mais saturados em light pra contrastar com bg claro */
+  --accent-green: oklch(0.55 0.18 152);
+  --accent-cyan: oklch(0.55 0.15 215);
+
+  --accent: var(--accent-green);
+  --accent-soft: oklch(0.94 0.06 152);   /* fundo "highlight" claro */
+  --accent-fg: oklch(1 0 0);             /* branco em cima do verde */
+
+  --success: var(--accent-green);
+  --success-soft: oklch(0.94 0.06 152);
+  --warning: oklch(0.55 0.14 75);
+  --warning-soft: oklch(0.94 0.05 75);
+  --danger: oklch(0.55 0.18 25);
+  --danger-soft: oklch(0.94 0.06 25);
+
+  --mesh-green-alpha: 6%;                /* mesh sutil em light */
+  --mesh-cyan-alpha: 5%;
+  --mesh-cyan-soft-alpha: 2%;
+
+  --topbar-h: 72px;
+  color-scheme: light;
+  background: var(--bg);
+  color: var(--text);
+  height: calc(100vh - var(--topbar-h));
+  height: calc(100dvh - var(--topbar-h));
+  min-height: 480px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ── DARK override ────────────────────────────────────────────────────────── */
+.dark .skills-canvas,
+[data-theme="dark"] .skills-canvas {
   --bg: oklch(0.13 0.01 250);
   --bg-elev: oklch(0.17 0.012 255);
   --bg-sunken: oklch(0.10 0.01 250);
@@ -18,38 +70,28 @@
   --text-muted: oklch(0.65 0.015 255);
   --text-subtle: oklch(0.45 0.012 255);
 
-  /* Cores de marca da tela */
   --accent-green: oklch(0.78 0.18 152);
   --accent-cyan: oklch(0.78 0.13 215);
 
-  /* Aliases pros tokens globais */
-  --accent: var(--accent-green);
   --accent-soft: oklch(0.22 0.06 152);
   --accent-fg: oklch(0.13 0.01 250);
 
-  --success: var(--accent-green);
   --success-soft: oklch(0.22 0.06 152);
   --warning: oklch(0.78 0.14 75);
   --warning-soft: oklch(0.28 0.05 75);
   --danger: oklch(0.68 0.18 25);
   --danger-soft: oklch(0.30 0.06 25);
 
-  /* Topbar do AppShell ocupa esse espaço acima do canvas — desconta pra
-     a tela caber inteira no viewport sem forçar scroll pro composer. */
-  --topbar-h: 72px;
+  --mesh-green-alpha: 14%;
+  --mesh-cyan-alpha: 12%;
+  --mesh-cyan-soft-alpha: 4%;
 
   color-scheme: dark;
-  background: var(--bg);
-  color: var(--text);
-  height: calc(100vh - var(--topbar-h));
-  height: calc(100dvh - var(--topbar-h));
-  min-height: 480px;
-  position: relative;
-  overflow: hidden;
 }
 
 /* =============================================================================
  * Mesh background — radial gradients animados em loop lento
+ * Alfa configurável via tokens (mais sutil em light, mais marcante em dark)
  * ============================================================================= */
 
 .skills-mesh {
@@ -58,9 +100,9 @@
   pointer-events: none;
   z-index: 0;
   background:
-    radial-gradient(circle at 20% 12%, color-mix(in oklab, var(--accent-green) 14%, transparent), transparent 50%),
-    radial-gradient(circle at 82% 86%, color-mix(in oklab, var(--accent-cyan) 12%, transparent), transparent 55%),
-    radial-gradient(circle at 50% 50%, color-mix(in oklab, var(--accent-cyan) 4%, transparent), transparent 70%);
+    radial-gradient(circle at 20% 12%, color-mix(in oklab, var(--accent-green) var(--mesh-green-alpha), transparent), transparent 50%),
+    radial-gradient(circle at 82% 86%, color-mix(in oklab, var(--accent-cyan) var(--mesh-cyan-alpha), transparent), transparent 55%),
+    radial-gradient(circle at 50% 50%, color-mix(in oklab, var(--accent-cyan) var(--mesh-cyan-soft-alpha), transparent), transparent 70%);
   animation: mesh-shift 22s ease-in-out infinite alternate;
 }
 
@@ -253,7 +295,9 @@
   bottom: -3px;
   display: inline-grid;
   place-items: center;
-  filter: drop-shadow(0 0 3px oklch(0.13 0.01 250 / 0.9));
+  /* Sombra preta translúcida funciona em ambos os themes — dá profundidade
+     ao badge sobre o ícone (dark: separação da pasta, light: relevo). */
+  filter: drop-shadow(0 0 3px oklch(0 0 0 / 0.4));
 }
 
 /* Children container animado (expand/collapse) */
@@ -692,7 +736,7 @@
   border: none;
   border-radius: 9px;
   background: linear-gradient(135deg, var(--accent-green), var(--accent-cyan));
-  color: oklch(0.13 0.01 250);
+  color: var(--accent-fg);     /* light: branco; dark: preto-acinzentado */
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
@@ -977,7 +1021,8 @@
 .skills-markdown code {
   font-family: var(--font-mono);
   font-size: 12.5px;
-  background: color-mix(in oklab, var(--bg) 80%, transparent);
+  /* bg-sunken garante contraste com bubble-elev em ambos themes */
+  background: var(--bg-sunken);
   border: 1px solid var(--border);
   border-radius: 4px;
   padding: 1px 5px;
@@ -1093,7 +1138,7 @@
 }
 .skills-agent-option--active {
   background: linear-gradient(135deg, var(--accent-green), var(--accent-cyan));
-  color: oklch(0.13 0.01 250);
+  color: var(--accent-fg);
   font-weight: 600;
   box-shadow: 0 4px 14px color-mix(in oklab, var(--accent-green) 28%, transparent);
 }
@@ -1660,7 +1705,7 @@
 .skills-askform-btn--ghost { /* default */ }
 .skills-askform-btn--primary {
   background: linear-gradient(135deg, var(--accent-green), var(--accent-cyan));
-  color: oklch(0.13 0.01 250);
+  color: var(--accent-fg);
   border-color: transparent;
   font-weight: 600;
   box-shadow: 0 4px 12px color-mix(in oklab, var(--accent-green) 25%, transparent);
@@ -1668,7 +1713,7 @@
 .skills-askform-btn--primary:hover {
   transform: translateY(-1px);
   box-shadow: 0 6px 18px color-mix(in oklab, var(--accent-green) 35%, transparent);
-  color: oklch(0.13 0.01 250);
+  color: var(--accent-fg);
 }
 
 .skills-askform--done {

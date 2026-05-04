@@ -29,6 +29,24 @@ function updateLastAgentMessage(
   return messages;
 }
 
+/**
+ * Defesa em profundidade: força TODAS as agent messages com isStreaming=true
+ * pra finalizado. Resolve estado órfão quando abort/error/network anomalia
+ * deixa bolhas antigas com spinner girando eternamente.
+ */
+function closeAllStreaming(messages: ChatMessage[]): ChatMessage[] {
+  let changed = false;
+  const now = Date.now();
+  const next = messages.map((m) => {
+    if (m.role === "agent" && m.isStreaming) {
+      changed = true;
+      return { ...m, isStreaming: false, finishedAt: m.finishedAt ?? now };
+    }
+    return m;
+  });
+  return changed ? next : messages;
+}
+
 export function chatReducer(state: ChatState, action: ChatAction): ChatState {
   switch (action.type) {
     case "USER_MESSAGE_SENT": {
@@ -39,11 +57,14 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       };
     }
     case "AGENT_TURN_STARTED": {
+      // Defesa: fecha qualquer bolha anterior que ficou órfã com
+      // isStreaming=true (abort sem ack, network anomalia, etc.)
+      const sanitized = closeAllStreaming(state.messages);
       return {
         ...state,
         isStreaming: true,
         messages: [
-          ...state.messages,
+          ...sanitized,
           {
             id: action.id,
             role: "agent",
@@ -115,27 +136,24 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return { ...state, sessionId: action.sessionId };
     }
     case "AGENT_TURN_FINISHED": {
+      // Fecha TODAS streaming (não só a última) — paranoia anti-órfão.
       return {
         ...state,
         isStreaming: false,
-        messages: updateLastAgentMessage(state.messages, (m) => ({
-          ...m,
-          isStreaming: false,
-          finishedAt: Date.now(),
-        })),
+        messages: closeAllStreaming(state.messages),
       };
     }
     case "ERROR": {
-      // Marca a última mensagem do agente (se existir) como erro e finaliza streaming
+      // Marca a última agent message com erro + fecha TODAS streaming.
       const last = lastAgentMessage(state.messages);
-      const messages = last
-        ? updateLastAgentMessage(state.messages, (m) => ({
-            ...m,
-            isStreaming: false,
-            finishedAt: Date.now(),
-            error: action.error,
-          }))
-        : state.messages;
+      let messages = state.messages;
+      if (last) {
+        messages = updateLastAgentMessage(messages, (m) => ({
+          ...m,
+          error: action.error,
+        }));
+      }
+      messages = closeAllStreaming(messages);
       return {
         ...state,
         isStreaming: false,

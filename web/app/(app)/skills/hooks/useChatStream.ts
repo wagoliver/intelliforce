@@ -130,9 +130,16 @@ export function useChatStream() {
       } catch (err) {
         if ((err as any)?.name !== "AbortError") {
           dispatch({ type: "ERROR", error: err instanceof Error ? err.message : String(err) });
+        } else {
+          // Abort manual: marca o turn como finished pra spinner sumir.
+          dispatch({ type: "AGENT_TURN_FINISHED" });
         }
       } finally {
         abortRef.current = null;
+        // Garantia final: se por algum motivo nem AGENT_TURN_FINISHED nem
+        // ERROR foram despachados, ainda assim fecha o estado de streaming.
+        // É idempotente — se já estava finalizado, não faz nada visível.
+        dispatch({ type: "AGENT_TURN_FINISHED" });
       }
     },
     [state.isStreaming, state.sessionId],
@@ -141,6 +148,9 @@ export function useChatStream() {
   const abort = useCallback(() => {
     abortRef.current?.abort();
     abortRef.current = null;
+    // O catch (AbortError) já vai despachar AGENT_TURN_FINISHED, mas
+    // dispara aqui também caso o stream nem tenha começado a ler eventos.
+    dispatch({ type: "AGENT_TURN_FINISHED" });
   }, []);
 
   return { state, send, abort };

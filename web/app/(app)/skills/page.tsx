@@ -699,8 +699,16 @@ function LiveStatus({
       transition={{ duration: reducedMotion ? 0 : 0.18 }}
       aria-live="polite"
     >
-      <span className="skills-live-pulse" aria-hidden="true" />
-      <span className="skills-live-label">{label}</span>
+      <LiveSpinner reducedMotion={reducedMotion} />
+      <motion.span
+        key={label}                  /* re-anima quando a label troca */
+        className="skills-live-label"
+        initial={reducedMotion ? { opacity: 1 } : { opacity: 0, x: 4 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: reducedMotion ? 0 : 0.16, ease: "easeOut" }}
+      >
+        {label}
+      </motion.span>
       {lastRunningTool && (
         <LiveClock startedAt={lastRunningTool.startedAt} finishedAt={null} />
       )}
@@ -710,6 +718,40 @@ function LiveStatus({
         </span>
       )}
     </motion.div>
+  );
+}
+
+/**
+ * Spinner SVG circular sempre rodando enquanto LiveStatus está montado.
+ * Substitui o pulse-dot anterior. Cor herdada do --skills-live-status--<kind>
+ * variant via currentColor.
+ */
+function LiveSpinner({ reducedMotion }: { reducedMotion: boolean }) {
+  return (
+    <svg
+      className="skills-live-spinner"
+      viewBox="0 0 16 16"
+      width={14}
+      height={14}
+      aria-hidden="true"
+      style={reducedMotion ? { animation: "none", opacity: 0.7 } : undefined}
+    >
+      <circle
+        cx="8" cy="8" r="6"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeOpacity="0.25"
+      />
+      <path
+        d="M 8 2 A 6 6 0 0 1 14 8"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+    </svg>
   );
 }
 

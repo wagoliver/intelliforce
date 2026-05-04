@@ -28,8 +28,8 @@ antes de operar nela:
 | Departamentos | `intelliforce-departments` | CRUD de departments (top-level org unit) |
 | Squads | `intelliforce-squads` | CRUD de squads dentro de um departamento |
 | Atividades | `intelliforce-activities` | CRUD de activities + agendamento cron |
-| Digital employees | `intelliforce-agents` | (próxima fase) CRUD de definição de agente |
-| Instâncias / scale | `intelliforce-instances` | (próxima fase) Contratar/demitir agentes pra activity |
+| Digital employees | `intelliforce-agents` | CRUD de definição (papel) de digital employee |
+| Instâncias / scale | `intelliforce-instances` | Contratar/demitir digital employees por activity |
 | Tarefas | `intelliforce-tasks` | (próxima fase) Disparar e listar tasks |
 | Aprovações | `intelliforce-approvals` | (próxima fase) Inbox + approve/reject |
 | Auditoria | `intelliforce-audit` | (próxima fase) Eventos, llm-calls, timeline |

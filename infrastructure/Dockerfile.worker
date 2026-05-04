@@ -70,6 +70,8 @@ COPY opencode/.opencode/skills/intelliforce-discover /opencode-seed/skills/intel
 COPY opencode/.opencode/skills/intelliforce-departments /opencode-seed/skills/intelliforce-departments
 COPY opencode/.opencode/skills/intelliforce-squads /opencode-seed/skills/intelliforce-squads
 COPY opencode/.opencode/skills/intelliforce-activities /opencode-seed/skills/intelliforce-activities
+COPY opencode/.opencode/skills/intelliforce-agents /opencode-seed/skills/intelliforce-agents
+COPY opencode/.opencode/skills/intelliforce-instances /opencode-seed/skills/intelliforce-instances
 
 # -----------------------------------------------------------------------------
 # Healthcheck e entrypoint

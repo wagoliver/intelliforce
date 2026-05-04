@@ -137,6 +137,44 @@ Pra perguntas únicas/curtas use prosa direto — `ask` é só pra coletar
 formulário com múltiplos campos. Após o user responder, ele manda mensagem
 com `**campo**: valor` e você parseia + cria.
 
+## Skills que precisam de credencial externa (Cofre / Vault)
+
+Se a skill que você está criando precisa de senha, token, API key ou
+qualquer credencial pra chamar sistema externo (Zoho, ITSM, banco,
+qualquer API que não seja a do próprio IntelliForce):
+
+1. **NUNCA** hardcode a credencial no script.
+2. **NUNCA** peça pro user passar a credencial em texto na conversa.
+3. **Use o Cofre**: o user cadastra a credencial uma única vez em `/vault`
+   na UI, gerando um slug único (ex.: `zoho-api-token`).
+4. O script da skill busca o valor em runtime via:
+
+```python
+import subprocess, sys
+
+result = subprocess.run(
+    [
+        "python",
+        "/opencode-runtime/.opencode/skills/intelliforce-api/scripts/get_secret.py",
+        "<slug-do-secret>",
+        "--skill", "<slug-desta-skill>",  # ← skill que estou criando
+    ],
+    capture_output=True, text=True, timeout=20,
+)
+if result.returncode != 0:
+    print(result.stderr.strip(), file=sys.stderr)
+    sys.exit(1)
+secret_value = result.stdout
+# usar secret_value direto na chamada externa, não persistir
+```
+
+Detalhes completos em `intelliforce-api/SKILL.md` (seção "Cofre / Vault").
+
+Se ao escrever a skill você descobrir que precisa de credencial mas o user
+não disse qual, **pergunte**: "Essa skill vai chamar API X — você já
+cadastrou o token de X no Cofre? Qual o slug?". Se o user não tiver, peça
+pra ele cadastrar em `/vault` antes de você terminar a skill.
+
 ## Restrições
 
 - **Nunca** crie arquivos fora de `opencode/.opencode/`.

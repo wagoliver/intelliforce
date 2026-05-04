@@ -1,9 +1,11 @@
 ---
 name: intelliforce-api
-description: Skill fundação do operador IntelliForce. Define como chamar a API do sistema, autenticação JWT, base URL via docker network interna, padrões de resposta e tratamento de erros. Outras skills intelliforce-* seguem o mesmo padrão.
+description: Skill fundação do operador IntelliForce. Define como chamar a API do sistema, autenticação JWT, base URL via docker network interna, padrões de resposta, tratamento de erros e como ler secrets do Cofre. Outras skills intelliforce-* seguem o mesmo padrão.
 license: MIT
 allowed-tools:
   - Bash(python /opencode-runtime/.opencode/skills/intelliforce-api/scripts/auth_check.py *)
+  - Bash(python /opencode-runtime/.opencode/skills/intelliforce-api/scripts/list_secrets.py *)
+  - Bash(python /opencode-runtime/.opencode/skills/intelliforce-api/scripts/get_secret.py *)
   - Read
 ---
 
@@ -97,3 +99,75 @@ Retorna o JSON de `GET /auth/me` (id, email, name, role do user logado).
 
 Use no início de qualquer fluxo onde você suspeita que o token expirou ou
 quando o user pergunta "quem sou eu?".
+
+## Cofre / Vault — secrets criptografados
+
+O IntelliForce tem um Cofre (`/vault` na UI) onde o user cadastra senhas e
+tokens (Zoho, ITSM, banco, qualquer credencial externa). Skills NUNCA
+guardam credenciais no código — sempre buscam pelo slug em runtime.
+
+### Listar secrets disponíveis
+
+```bash
+python /opencode-runtime/.opencode/skills/intelliforce-api/scripts/list_secrets.py
+```
+
+Retorna metadados (slug, description, tags, criado em, último acesso) — **nunca
+o valor**. Use quando o user perguntar "quais credenciais o sistema tem?" ou
+quando precisar descobrir qual slug usar.
+
+### Ler valor de um secret
+
+```bash
+python /opencode-runtime/.opencode/skills/intelliforce-api/scripts/get_secret.py <slug> --skill <nome-da-skill> [--task-id <uuid>]
+```
+
+Saída: o valor descriptografado direto em **stdout** (1 linha, sem newline
+extra). Stderr só pra erros.
+
+**Padrão de uso em outras skills `intelliforce-*` que precisam de credencial
+externa**, ex.: skill `intelliforce-zoho-validador` chamando API Zoho:
+
+```python
+import os, subprocess, sys, httpx
+
+# Pega token Zoho do Cofre — uma chamada por execução, não cachear em arquivo
+result = subprocess.run(
+    [
+        "python",
+        "/opencode-runtime/.opencode/skills/intelliforce-api/scripts/get_secret.py",
+        "zoho-api-token",
+        "--skill", "intelliforce-zoho-validador",  # ← slug DESTA skill, não da intelliforce-api
+    ],
+    capture_output=True,
+    text=True,
+    timeout=20,
+)
+if result.returncode != 0:
+    print(result.stderr.strip(), file=sys.stderr)
+    sys.exit(1)
+
+zoho_token = result.stdout  # já vem sem newline extra
+
+# Usa o token pra chamar Zoho
+resp = httpx.get(
+    "https://api.zoho.com/some/endpoint",
+    headers={"Authorization": f"Zoho-oauthtoken {zoho_token}"},
+    timeout=15,
+)
+# ... resto do fluxo
+```
+
+### Regras pra usar o Vault corretamente
+
+1. **Sempre passe `--skill <slug-da-skill>`** com o nome real desta skill,
+   não da intelliforce-api. O audit log usa pra rastrear quem acessou o quê.
+2. **Nunca persista o valor**: não escreva em arquivo, log, ou variável que
+   sobreviva à execução. Use direto na chamada externa e descarte.
+3. **Não imprima o valor em stdout** quando for retornar resposta pro user.
+   Se o user perguntar "qual o valor do token?", responda que pode revelar
+   apenas pela UI `/vault` (que tem timer de auto-hide e audit reforçado).
+4. **Se o secret não existe** (`SECRET_NOT_FOUND`), avise o user pra cadastrar
+   na tela `/vault` — não invente um valor mockado.
+5. **Imutabilidade**: pra trocar valor, user tem que deletar e criar de novo.
+   Não há endpoint de update.

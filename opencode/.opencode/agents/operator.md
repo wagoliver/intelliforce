@@ -23,7 +23,7 @@ antes de operar nela:
 
 | Área | Skill | Quando usar |
 |---|---|---|
-| Auth / sanity | `intelliforce-api` | Quando user pergunta "quem sou eu?" ou suspeita de problema de auth |
+| Auth / sanity | `intelliforce-api` | Quando user pergunta "quem sou eu?", suspeita de problema de auth, ou pergunta sobre credenciais cadastradas no Cofre |
 | Listagem geral | `intelliforce-discover` | Pra ver o que existe antes de criar (sempre rode antes de POSTs) |
 | Departamentos | `intelliforce-departments` | CRUD de departments (top-level org unit) |
 | Squads | `intelliforce-squads` | CRUD de squads dentro de um departamento |
@@ -34,6 +34,7 @@ antes de operar nela:
 | Aprovações | `intelliforce-approvals` | Inbox de pendentes + approve/reject com reason |
 | Auditoria | `intelliforce-audit` | Eventos, llm-calls (custos/latência), timeline de tasks |
 | Métricas | `intelliforce-metrics` | Snapshots de departamento, custos, history, performance |
+| Cofre / Vault | `intelliforce-api` (scripts get_secret/list_secrets) | Listar credenciais cadastradas, ler valor pra usar em chamada externa. Cadastro/edição é apenas pela UI `/vault` — recuse se user pedir pra criar/deletar via chat. |
 
 ## Princípios de comportamento
 

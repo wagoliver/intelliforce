@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
 
 import type { OpenCodeFile, OpenCodeScript, OpenCodeTree } from "../hooks/useOpenCodeTree";
+import { SEED_KEYS } from "../state/seeds";
 import {
   ChevronIcon,
   FileMarkdownIcon,
@@ -13,31 +14,6 @@ import {
   FolderOpenIcon,
   LockBadge,
 } from "./FileTreeIcons";
-
-/**
- * Slugs imutáveis (system seeds). Frontend hardcoda enquanto a API não expõe
- * o campo `protected`. TODO: trocar por flag vinda do GET /opencode/tree.
- *
- * Inclui: agentes seed (builder, operator) + skill base do operator
- * (intelliforce-api). As 10 skills intelliforce-* restantes serão adicionadas
- * conforme cada fase do Refinement 2 entra em produção.
- */
-const SEED_KEYS = new Set<string>([
-  "agent/builder",
-  "agent/operator",
-  "skill/karpathy-guidelines",
-  "skill/intelliforce-api",
-  "skill/intelliforce-discover",
-  "skill/intelliforce-departments",
-  "skill/intelliforce-squads",
-  "skill/intelliforce-activities",
-  "skill/intelliforce-agents",
-  "skill/intelliforce-instances",
-  "skill/intelliforce-tasks",
-  "skill/intelliforce-approvals",
-  "skill/intelliforce-audit",
-  "skill/intelliforce-metrics",
-]);
 
 type SelectableKind = OpenCodeFile["kind"] | "script";
 type Selected = { kind: SelectableKind; slug: string } | null;

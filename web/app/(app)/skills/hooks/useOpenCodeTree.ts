@@ -63,25 +63,59 @@ export function useOpenCodeTree() {
   return { tree, loading, error, refetch };
 }
 
-export async function fetchOpenCodeContent(
-  kind: "skill" | "agent" | "command" | "script",
-  slug: string,
-): Promise<OpenCodeContent> {
-  let url: string;
+type OpenCodeKind = "skill" | "agent" | "command" | "script";
+
+function buildOpenCodeUrl(kind: OpenCodeKind, slug: string): string {
   if (kind === "script") {
-    // slug pra script vem como "<skill>/<filename>" — encodeURI dos dois lados separadamente
     const sepIdx = slug.indexOf("/");
     if (sepIdx === -1) throw new Error("Script slug malformado");
     const skillSlug = encodeURIComponent(slug.slice(0, sepIdx));
     const filename = encodeURIComponent(slug.slice(sepIdx + 1));
-    url = `/api/proxy/opencode/scripts/${skillSlug}/${filename}`;
-  } else {
-    const path = kind === "skill" ? "skills" : kind === "agent" ? "agents" : "commands";
-    url = `/api/proxy/opencode/${path}/${encodeURIComponent(slug)}`;
+    return `/api/proxy/opencode/scripts/${skillSlug}/${filename}`;
   }
-  const res = await fetch(url, { cache: "no-store" });
+  const path = kind === "skill" ? "skills" : kind === "agent" ? "agents" : "commands";
+  return `/api/proxy/opencode/${path}/${encodeURIComponent(slug)}`;
+}
+
+export async function fetchOpenCodeContent(
+  kind: OpenCodeKind,
+  slug: string,
+): Promise<OpenCodeContent> {
+  const res = await fetch(buildOpenCodeUrl(kind, slug), { cache: "no-store" });
   if (!res.ok) {
-    throw new Error(`HTTP ${res.status}`);
+    // Tenta extrair `detail` da API pra mensagem amigável; fallback genérico
+    let detail = `HTTP ${res.status}`;
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") detail = data.detail;
+    } catch {
+      /* ignore */
+    }
+    const err = new Error(detail) as Error & { status?: number };
+    err.status = res.status;
+    throw err;
   }
   return res.json();
+}
+
+export async function deleteOpenCodeItem(
+  kind: OpenCodeKind,
+  slug: string,
+): Promise<void> {
+  const res = await fetch(buildOpenCodeUrl(kind, slug), {
+    method: "DELETE",
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    let detail = `HTTP ${res.status}`;
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") detail = data.detail;
+    } catch {
+      /* ignore */
+    }
+    const err = new Error(detail) as Error & { status?: number };
+    err.status = res.status;
+    throw err;
+  }
 }

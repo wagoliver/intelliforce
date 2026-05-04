@@ -353,7 +353,14 @@ export default function SkillsPage() {
         </main>
       </div>
 
-      <SkillDrawer selected={selected} onClose={() => setSelected(null)} />
+      <SkillDrawer
+        selected={selected}
+        onClose={() => setSelected(null)}
+        onDeleted={() => {
+          setSelected(null);
+          void refetch();
+        }}
+      />
     </>
   );
 }

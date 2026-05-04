@@ -729,10 +729,158 @@
   transition: all 140ms ease;
   flex-shrink: 0;
 }
-.skills-drawer-close:hover {
+.skills-drawer-close:hover:not(:disabled) {
   background: var(--bg-hover);
   border-color: var(--border-strong);
   color: var(--text);
+}
+.skills-drawer-close:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.skills-drawer-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.skills-drawer-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 140ms ease;
+}
+.skills-drawer-action:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+.skills-drawer-action:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.skills-drawer-action--danger {
+  color: color-mix(in oklab, var(--danger) 70%, var(--text-muted));
+  border-color: color-mix(in oklab, var(--danger) 25%, var(--border));
+}
+.skills-drawer-action--danger:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--danger) 10%, transparent);
+  border-color: color-mix(in oklab, var(--danger) 50%, var(--border));
+  color: var(--danger);
+}
+
+/* =============================================================================
+ * Drawer confirm — view de exclusão (substitui o conteúdo while open)
+ * ============================================================================= */
+.skills-drawer-confirm {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 10px;
+  padding: 32px 20px;
+  margin: 24px 0;
+  border: 1px solid color-mix(in oklab, var(--danger) 25%, var(--border));
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--danger) 5%, var(--bg-sunken));
+}
+.skills-drawer-confirm-icon {
+  color: var(--danger);
+  margin-bottom: 4px;
+}
+.skills-drawer-confirm-title {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 500;
+  margin: 0;
+  color: var(--text);
+}
+.skills-drawer-confirm-text {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  margin: 0;
+  max-width: 360px;
+}
+.skills-drawer-confirm-text code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 1px 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+}
+.skills-drawer-confirm-warn {
+  font-size: 12px;
+  color: var(--danger);
+  font-weight: 500;
+  margin: 4px 0 0;
+}
+.skills-drawer-confirm-error {
+  margin-top: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--danger);
+  background: color-mix(in oklab, var(--danger) 12%, transparent);
+  border: 1px solid color-mix(in oklab, var(--danger) 40%, transparent);
+  border-radius: 6px;
+  width: 100%;
+  max-width: 360px;
+  text-align: left;
+  font-family: var(--font-mono);
+}
+.skills-drawer-confirm-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.skills-drawer-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
+  height: 34px;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 140ms ease;
+}
+.skills-drawer-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.skills-drawer-btn--ghost {
+  background: var(--bg);
+  color: var(--text);
+  border-color: var(--border);
+}
+.skills-drawer-btn--ghost:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+.skills-drawer-btn--danger {
+  background: var(--danger);
+  color: white;
+}
+.skills-drawer-btn--danger:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--danger) 85%, white);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--danger) 25%, transparent);
 }
 
 .skills-drawer-fm {

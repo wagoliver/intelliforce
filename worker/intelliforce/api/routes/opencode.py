@@ -8,12 +8,13 @@ MVP: read-only. Edição passa pelo agente builder via /chat/stream.
 """
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 from typing import Any
 
 import structlog
 import yaml
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 from intelliforce.api.deps import get_current_user
 from intelliforce.api.schemas.opencode import (
@@ -27,6 +28,44 @@ from intelliforce.settings import get_settings
 
 router = APIRouter(prefix="/opencode", tags=["opencode"])
 log = structlog.get_logger()
+
+# -----------------------------------------------------------------------------
+# System seeds — itens imutáveis bakeados na imagem Docker.
+# Manter em sincronia com web/app/(app)/skills/state/seeds.ts.
+# -----------------------------------------------------------------------------
+SEED_AGENTS: frozenset[str] = frozenset({"builder", "operator"})
+SEED_SKILLS_LITERAL: frozenset[str] = frozenset({"karpathy-guidelines"})
+
+
+def _is_intelliforce_skill(slug: str) -> bool:
+    """Toda skill com prefixo 'intelliforce-' é seed."""
+    return slug.startswith("intelliforce-")
+
+
+def _is_seed_skill(slug: str) -> bool:
+    return slug in SEED_SKILLS_LITERAL or _is_intelliforce_skill(slug)
+
+
+def _assert_not_seed_agent(slug: str) -> None:
+    if slug in SEED_AGENTS:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail=(
+                f"Agente '{slug}' é seed do sistema. Pra alterar, edite o "
+                "arquivo no repo e rebuild a imagem."
+            ),
+        )
+
+
+def _assert_not_seed_skill(slug: str) -> None:
+    if _is_seed_skill(slug):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail=(
+                f"Skill '{slug}' é seed do sistema. Pra alterar, edite o "
+                "arquivo no repo e rebuild a imagem."
+            ),
+        )
 
 
 def _opencode_root() -> Path:
@@ -273,3 +312,128 @@ async def get_script(
         frontmatter={},
         body=raw,
     )
+
+
+# -----------------------------------------------------------------------------
+# DELETE — exclusão direta via UI (alternativa ao chat com builder)
+#
+# Regra única: seeds (builder/operator/karpathy/intelliforce-*) NUNCA podem
+# ser excluídos via API. Mesmo que o frontend não mostre o botão, o backend
+# rejeita com 403. Pra alterar seeds, edita o arquivo e rebuild da imagem.
+# -----------------------------------------------------------------------------
+@router.delete(
+    "/agents/{slug}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
+async def delete_agent(
+    slug: str,
+    user: User = Depends(get_current_user),
+) -> Response:
+    slug = _safe_slug(slug)
+    _assert_not_seed_agent(slug)
+    root = _opencode_root()
+    target = root / "agents" / f"{slug}.md"
+    target = _resolve_safely(root, target)
+    if not target.is_file():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Agente não encontrado")
+    try:
+        target.unlink()
+    except OSError as e:
+        log.error("opencode.agent_delete_error", slug=slug, error=str(e))
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao excluir agente: {e}",
+        ) from e
+    log.info("opencode.agent_deleted", slug=slug, by=str(user.id))
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.delete(
+    "/skills/{slug}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
+async def delete_skill(
+    slug: str,
+    user: User = Depends(get_current_user),
+) -> Response:
+    """Exclui a skill inteira (pasta + SKILL.md + scripts/)."""
+    slug = _safe_slug(slug)
+    _assert_not_seed_skill(slug)
+    root = _opencode_root()
+    target = root / "skills" / slug
+    target = _resolve_safely(root, target)
+    if not target.is_dir():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Skill não encontrada")
+    try:
+        shutil.rmtree(target)
+    except OSError as e:
+        log.error("opencode.skill_delete_error", slug=slug, error=str(e))
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao excluir skill: {e}",
+        ) from e
+    log.info("opencode.skill_deleted", slug=slug, by=str(user.id))
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.delete(
+    "/commands/{slug}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
+async def delete_command(
+    slug: str,
+    user: User = Depends(get_current_user),
+) -> Response:
+    slug = _safe_slug(slug)
+    # Não há commands seed atualmente — sem assert
+    root = _opencode_root()
+    target = root / "commands" / f"{slug}.md"
+    target = _resolve_safely(root, target)
+    if not target.is_file():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Comando não encontrado")
+    try:
+        target.unlink()
+    except OSError as e:
+        log.error("opencode.command_delete_error", slug=slug, error=str(e))
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao excluir comando: {e}",
+        ) from e
+    log.info("opencode.command_deleted", slug=slug, by=str(user.id))
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.delete(
+    "/scripts/{skill_slug}/{filename}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
+async def delete_script(
+    skill_slug: str,
+    filename: str,
+    user: User = Depends(get_current_user),
+) -> Response:
+    """Exclui um único script .py de uma skill (não toca na skill em si)."""
+    skill_slug = _safe_slug(skill_slug)
+    _assert_not_seed_skill(skill_slug)
+    filename = _safe_filename(filename)
+    if not filename.endswith(".py"):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Apenas .py suportado")
+    root = _opencode_root()
+    target = root / "skills" / skill_slug / "scripts" / filename
+    target = _resolve_safely(root, target)
+    if not target.is_file():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Script não encontrado")
+    try:
+        target.unlink()
+    except OSError as e:
+        log.error("opencode.script_delete_error", slug=f"{skill_slug}/{filename}", error=str(e))
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao excluir script: {e}",
+        ) from e
+    log.info("opencode.script_deleted", slug=f"{skill_slug}/{filename}", by=str(user.id))
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

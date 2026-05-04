@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
 from sqlalchemy import desc, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -171,13 +171,13 @@ async def read_secret_value(
     return SecretValueOut(slug=secret.slug, value=plaintext)
 
 
-@router.delete("/{slug}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{slug}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 async def delete_secret(
     slug: str,
     request: Request,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> None:
+) -> Response:
     """Deleta secret. Audit log preserva slug snapshot (FK vira null)."""
     result = await db.execute(select(Secret).where(Secret.slug == slug))
     secret = result.scalar_one_or_none()
@@ -198,6 +198,7 @@ async def delete_secret(
         ip=_client_ip(request),
     )
     await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/{slug}/audit", response_model=list[SecretAccessLogOut])

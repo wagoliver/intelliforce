@@ -255,7 +255,6 @@ export default function SkillsPage() {
                   />
                 ))}
               </AnimatePresence>
-              {state.isStreaming && <div className="skills-thinking">OpenCode está pensando…</div>}
             </div>
           )}
 
@@ -479,7 +478,19 @@ function MessageBubble({
       animate="visible"
       transition={{ duration: reducedMotion ? 0 : 0.28, ease: [0.34, 1.56, 0.64, 1] }}
     >
-      <span className="skills-bubble-role">{isUser ? "você" : "opencode"}</span>
+      <span className="skills-bubble-role">
+        {isUser ? "você" : "opencode"}
+        {!isUser && message.role === "agent" && (
+          <LiveClock
+            startedAt={message.startedAt}
+            finishedAt={message.finishedAt}
+          />
+        )}
+      </span>
+
+      {!isUser && message.role === "agent" && message.isStreaming && (
+        <LiveStatus message={message} reducedMotion={reducedMotion} />
+      )}
 
       {!isUser && (message.toolCalls.length > 0 || message.thinkingLines.length > 0) && (
         <div className="skills-process">
@@ -549,6 +560,94 @@ function ToolCallLine({
       </span>
       <span className="skills-toolcall-tool">{call.tool}</span>
       {call.description && <span className="skills-toolcall-desc">{call.description}</span>}
+    </motion.div>
+  );
+}
+
+function formatElapsed(ms: number): string {
+  const s = Math.max(0, ms) / 1000;
+  if (s < 60) return `${s.toFixed(1)}s`;
+  const min = Math.floor(s / 60);
+  const rem = s - min * 60;
+  return `${min}m ${rem.toFixed(0)}s`;
+}
+
+/**
+ * Cronômetro vivo: incrementa a cada 100ms enquanto streaming, congela em
+ * `finishedAt - startedAt` quando turn termina. Sempre visível na bolha do
+ * agente — mostra também o tempo total das mensagens já concluídas.
+ */
+function LiveClock({
+  startedAt,
+  finishedAt,
+}: {
+  startedAt: number;
+  finishedAt: number | null;
+}) {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (finishedAt !== null) {
+      // Congela exatamente em finishedAt
+      setNow(finishedAt);
+      return;
+    }
+    const id = window.setInterval(() => setNow(Date.now()), 100);
+    return () => window.clearInterval(id);
+  }, [finishedAt]);
+
+  const elapsed = (finishedAt ?? now) - startedAt;
+  return <span className="skills-live-clock">{formatElapsed(elapsed)}</span>;
+}
+
+/**
+ * Status em destaque dentro do bubble enquanto agente está streaming.
+ * Mostra a atividade corrente — antes do primeiro evento, "OpenCode está
+ * pensando…"; quando uma tool roda, "Bash · vault.py list"; quando texto
+ * começa a streamar, troca pra "Gerando resposta…".
+ *
+ * Some quando turn termina (parent só renderiza enquanto isStreaming).
+ */
+function LiveStatus({
+  message,
+  reducedMotion,
+}: {
+  message: Extract<ChatMessage, { role: "agent" }>;
+  reducedMotion: boolean;
+}) {
+  const lastRunningTool = [...message.toolCalls].reverse().find((tc) => tc.status === "running");
+  const lastThinking = message.thinkingLines[message.thinkingLines.length - 1];
+  const hasText = message.text.length > 0;
+
+  let label: string;
+  let kind: "thinking" | "tool" | "reasoning" | "writing";
+
+  if (hasText) {
+    label = "Gerando resposta…";
+    kind = "writing";
+  } else if (lastRunningTool) {
+    const desc = lastRunningTool.description ? ` · ${lastRunningTool.description}` : "";
+    label = `${lastRunningTool.tool}${desc}`;
+    kind = "tool";
+  } else if (lastThinking?.label) {
+    label = lastThinking.label;
+    kind = "reasoning";
+  } else {
+    label = "OpenCode está pensando…";
+    kind = "thinking";
+  }
+
+  return (
+    <motion.div
+      key={kind + label.slice(0, 20)}
+      className={`skills-live-status skills-live-status--${kind}`}
+      initial={reducedMotion ? { opacity: 1 } : { opacity: 0, y: -2 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: reducedMotion ? 0 : 0.18 }}
+      aria-live="polite"
+    >
+      <span className="skills-live-pulse" aria-hidden="true" />
+      <span className="skills-live-label">{label}</span>
     </motion.div>
   );
 }

@@ -30,6 +30,8 @@ export type ChatMessage =
       toolCalls: ToolCall[];
       thinkingLines: ThinkingLine[];
       isStreaming: boolean;
+      startedAt: number;        // ms epoch — pra cronômetro ao vivo enquanto streaming
+      finishedAt: number | null; // ms epoch quando turn termina (congela o relógio)
       error?: string;
     };
 

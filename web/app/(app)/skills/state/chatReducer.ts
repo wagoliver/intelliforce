@@ -51,6 +51,8 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
             toolCalls: [],
             thinkingLines: [],
             isStreaming: true,
+            startedAt: Date.now(),
+            finishedAt: null,
           },
         ],
       };
@@ -110,6 +112,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         messages: updateLastAgentMessage(state.messages, (m) => ({
           ...m,
           isStreaming: false,
+          finishedAt: Date.now(),
         })),
       };
     }
@@ -120,6 +123,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         ? updateLastAgentMessage(state.messages, (m) => ({
             ...m,
             isStreaming: false,
+            finishedAt: Date.now(),
             error: action.error,
           }))
         : state.messages;

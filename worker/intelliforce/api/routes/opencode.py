@@ -336,9 +336,16 @@ async def delete_agent(
     target = root / "agents" / f"{slug}.md"
     target = _resolve_safely(root, target)
     if not target.is_file():
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Agente não encontrado")
+        # Idempotente: já não existe = sucesso. Cliente pode ter mandado
+        # duplicatas (double-click) ou o arquivo foi removido por outro caminho.
+        log.info("opencode.agent_delete_noop", slug=slug, reason="already-absent")
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
     try:
         target.unlink()
+    except FileNotFoundError:
+        # Race: alguém deletou entre o is_file() e o unlink(). Idempotente.
+        log.info("opencode.agent_delete_race", slug=slug)
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
     except OSError as e:
         log.error("opencode.agent_delete_error", slug=slug, error=str(e))
         raise HTTPException(
@@ -365,9 +372,13 @@ async def delete_skill(
     target = root / "skills" / slug
     target = _resolve_safely(root, target)
     if not target.is_dir():
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Skill não encontrada")
+        log.info("opencode.skill_delete_noop", slug=slug, reason="already-absent")
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
     try:
         shutil.rmtree(target)
+    except FileNotFoundError:
+        log.info("opencode.skill_delete_race", slug=slug)
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
     except OSError as e:
         log.error("opencode.skill_delete_error", slug=slug, error=str(e))
         raise HTTPException(
@@ -393,9 +404,13 @@ async def delete_command(
     target = root / "commands" / f"{slug}.md"
     target = _resolve_safely(root, target)
     if not target.is_file():
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Comando não encontrado")
+        log.info("opencode.command_delete_noop", slug=slug, reason="already-absent")
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
     try:
         target.unlink()
+    except FileNotFoundError:
+        log.info("opencode.command_delete_race", slug=slug)
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
     except OSError as e:
         log.error("opencode.command_delete_error", slug=slug, error=str(e))
         raise HTTPException(
@@ -426,9 +441,17 @@ async def delete_script(
     target = root / "skills" / skill_slug / "scripts" / filename
     target = _resolve_safely(root, target)
     if not target.is_file():
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Script não encontrado")
+        log.info(
+            "opencode.script_delete_noop",
+            slug=f"{skill_slug}/{filename}",
+            reason="already-absent",
+        )
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
     try:
         target.unlink()
+    except FileNotFoundError:
+        log.info("opencode.script_delete_race", slug=f"{skill_slug}/{filename}")
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
     except OSError as e:
         log.error("opencode.script_delete_error", slug=f"{skill_slug}/{filename}", error=str(e))
         raise HTTPException(

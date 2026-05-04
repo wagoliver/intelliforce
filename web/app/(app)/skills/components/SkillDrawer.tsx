@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   deleteOpenCodeItem,
@@ -29,6 +29,9 @@ export function SkillDrawer({ selected, onClose, onDeleted }: Props) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  // Guard contra double-click: setState é async, não dá pra confiar em
+  // `disabled` no botão pra prevenir chamadas duplicadas em sequência rápida.
+  const inFlightRef = useRef(false);
   const reducedMotion = useReducedMotion();
 
   useEffect(() => {
@@ -81,6 +84,8 @@ export function SkillDrawer({ selected, onClose, onDeleted }: Props) {
 
   async function handleDelete() {
     if (!selected || !canDelete) return;
+    if (inFlightRef.current) return; // prevent double-call (sync ref guard)
+    inFlightRef.current = true;
     setDeleting(true);
     setDeleteError(null);
     try {
@@ -94,6 +99,8 @@ export function SkillDrawer({ selected, onClose, onDeleted }: Props) {
       const detail = err instanceof Error ? err.message : String(err);
       setDeleteError(detail);
       setDeleting(false);
+    } finally {
+      inFlightRef.current = false;
     }
   }
 

@@ -84,6 +84,7 @@ if [ -d "$SOURCE_DIR" ]; then
         "skills/intelliforce-approvals"
         "skills/intelliforce-audit"
         "skills/intelliforce-metrics"
+        "skills/intelliforce-vault"
     )
 
     if [ -d "$SEED_DIR" ] && [ -d "$TARGET_OPENCODE" ]; then

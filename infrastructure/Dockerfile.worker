@@ -76,6 +76,7 @@ COPY opencode/.opencode/skills/intelliforce-tasks /opencode-seed/skills/intellif
 COPY opencode/.opencode/skills/intelliforce-approvals /opencode-seed/skills/intelliforce-approvals
 COPY opencode/.opencode/skills/intelliforce-audit /opencode-seed/skills/intelliforce-audit
 COPY opencode/.opencode/skills/intelliforce-metrics /opencode-seed/skills/intelliforce-metrics
+COPY opencode/.opencode/skills/intelliforce-vault /opencode-seed/skills/intelliforce-vault
 
 # -----------------------------------------------------------------------------
 # Healthcheck e entrypoint

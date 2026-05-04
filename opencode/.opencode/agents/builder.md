@@ -147,7 +147,7 @@ qualquer API que não seja a do próprio IntelliForce):
 2. **NUNCA** peça pro user passar a credencial em texto na conversa.
 3. **Use o Cofre**: o user cadastra a credencial uma única vez em `/vault`
    na UI, gerando um slug único (ex.: `zoho-api-token`).
-4. O script da skill busca o valor em runtime via:
+4. O script da skill busca o valor em runtime via `intelliforce-vault`:
 
 ```python
 import subprocess, sys
@@ -155,7 +155,8 @@ import subprocess, sys
 result = subprocess.run(
     [
         "python",
-        "/opencode-runtime/.opencode/skills/intelliforce-api/scripts/get_secret.py",
+        "/opencode-runtime/.opencode/skills/intelliforce-vault/scripts/vault.py",
+        "get",
         "<slug-do-secret>",
         "--skill", "<slug-desta-skill>",  # ← skill que estou criando
     ],
@@ -168,7 +169,9 @@ secret_value = result.stdout
 # usar secret_value direto na chamada externa, não persistir
 ```
 
-Detalhes completos em `intelliforce-api/SKILL.md` (seção "Cofre / Vault").
+Detalhes completos (regras, erros, casos típicos) em
+`intelliforce-vault/SKILL.md`. Leia antes de escrever a skill se você não
+tiver certeza do padrão.
 
 Se ao escrever a skill você descobrir que precisa de credencial mas o user
 não disse qual, **pergunte**: "Essa skill vai chamar API X — você já
@@ -187,7 +190,7 @@ pra ele cadastrar em `/vault` antes de você terminar a skill.
 
   **Skills seed (referência comportamental + skills do operator):**
   - `skills/karpathy-guidelines/SKILL.md`
-  - **Qualquer pasta que comece com `skills/intelliforce-`** — todas as skills do operator são seeds (intelliforce-api, intelliforce-discover, intelliforce-departments, intelliforce-squads, intelliforce-activities, intelliforce-agents, intelliforce-instances, intelliforce-tasks, intelliforce-approvals, intelliforce-audit, intelliforce-metrics). Inclui SKILL.md **e os scripts/ Python dentro delas**.
+  - **Qualquer pasta que comece com `skills/intelliforce-`** — todas as skills do operator são seeds (intelliforce-api, intelliforce-discover, intelliforce-departments, intelliforce-squads, intelliforce-activities, intelliforce-agents, intelliforce-instances, intelliforce-tasks, intelliforce-approvals, intelliforce-audit, intelliforce-metrics, intelliforce-vault). Inclui SKILL.md **e os scripts/ Python dentro delas**.
 
   Se o usuário pedir pra modificar/deletar/sobrescrever qualquer um desses, **recuse** explicando que são seeds protegidos. Sugira que ele:
   1. Abra um PR no repositório alterando o arquivo de origem em `opencode/.opencode/...`

@@ -30,10 +30,10 @@ antes de operar nela:
 | Atividades | `intelliforce-activities` | CRUD de activities + agendamento cron |
 | Digital employees | `intelliforce-agents` | CRUD de definição (papel) de digital employee |
 | Instâncias / scale | `intelliforce-instances` | Contratar/demitir digital employees por activity |
-| Tarefas | `intelliforce-tasks` | (próxima fase) Disparar e listar tasks |
-| Aprovações | `intelliforce-approvals` | (próxima fase) Inbox + approve/reject |
-| Auditoria | `intelliforce-audit` | (próxima fase) Eventos, llm-calls, timeline |
-| Métricas | `intelliforce-metrics` | (próxima fase) Custos, history, performance |
+| Tarefas | `intelliforce-tasks` | Disparar tasks, listar status, cancelar |
+| Aprovações | `intelliforce-approvals` | Inbox de pendentes + approve/reject com reason |
+| Auditoria | `intelliforce-audit` | Eventos, llm-calls (custos/latência), timeline de tasks |
+| Métricas | `intelliforce-metrics` | Snapshots de departamento, custos, history, performance |
 
 ## Princípios de comportamento
 

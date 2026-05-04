@@ -147,27 +147,41 @@ qualquer API que não seja a do próprio IntelliForce):
 2. **NUNCA** peça pro user passar a credencial em texto na conversa.
 3. **Use o Cofre**: o user cadastra a credencial uma única vez em `/vault`
    na UI, gerando um slug único (ex.: `zoho-api-token`).
-4. O script da skill busca o valor em runtime via `intelliforce-vault`:
+4. O script da skill busca o valor em runtime via `intelliforce-vault`.
+   Cada secret pode carregar **1 ou múltiplos campos** (ex.: Zoho =
+   client_id + client_secret + refresh_token num único secret `zoho`):
 
 ```python
-import subprocess, sys
+import json, subprocess, sys
 
+VAULT = "/opencode-runtime/.opencode/skills/intelliforce-vault/scripts/vault.py"
+
+# Multi-field: pega tudo de uma vez como dict
 result = subprocess.run(
-    [
-        "python",
-        "/opencode-runtime/.opencode/skills/intelliforce-vault/scripts/vault.py",
-        "get",
-        "<slug-do-secret>",
-        "--skill", "<slug-desta-skill>",  # ← skill que estou criando
-    ],
+    ["python", VAULT, "get", "zoho",
+     "--skill", "<slug-desta-skill>",  # ← skill que estou criando
+     "--all-fields"],
     capture_output=True, text=True, timeout=20,
 )
 if result.returncode != 0:
     print(result.stderr.strip(), file=sys.stderr)
     sys.exit(1)
-secret_value = result.stdout
-# usar secret_value direto na chamada externa, não persistir
+creds = json.loads(result.stdout)
+# creds = {"client_id": "...", "client_secret": "...", "refresh_token": "..."}
+
+# OU single-field: secret de 1 campo só, atalho sem --field
+result = subprocess.run(
+    ["python", VAULT, "get", "<slug-do-secret>",
+     "--skill", "<slug-desta-skill>"],
+    capture_output=True, text=True, timeout=20,
+)
+secret_value = result.stdout  # valor cru, sem newline
 ```
+
+Pergunte ao user a estrutura antes de criar a skill: "essa API exige
+quais credenciais? client_id + secret? só 1 token? OAuth com refresh?".
+Se for OAuth ou multi-parte, o user deve cadastrar 1 secret no Cofre
+com vários campos (não vários secrets separados).
 
 Detalhes completos (regras, erros, casos típicos) em
 `intelliforce-vault/SKILL.md`. Leia antes de escrever a skill se você não

@@ -51,7 +51,7 @@ emita as perguntas num **bloco de código com linguagem `ask`** — o frontend
 detecta isso e renderiza um formulário inline pro user responder cada
 campo separadamente em vez de uma resposta em texto livre.
 
-**Formato:**
+**FORMATO EXATO** (siga isso à risca — fence triplo + linguagem `ask`):
 
 ````markdown
 ```ask
@@ -64,6 +64,17 @@ campo separadamente em vez de uma resposta em texto livre.
 ]
 ```
 ````
+
+**Erros comuns a evitar:**
+- ❌ Emitir o JSON sem fence (`[ {...} ]` solto no meio do texto) — o
+  frontend tem fallback que detecta mesmo sem fence, mas a renderização
+  fica menos confiável.
+- ❌ Usar fence com linguagem errada (` ```json `, ` ``` ` plain) — use
+  exatamente `ask`.
+- ❌ Quebrar o JSON em múltiplas mensagens — emita o array completo numa
+  só resposta, dentro de UM bloco fechado.
+- ❌ Adicionar prosa explicando "vou perguntar isso e aquilo" antes do
+  bloco — pode, mas o user só interage com o form. Mantenha breve.
 
 **Tipos suportados:**
 - `text` — input single-line

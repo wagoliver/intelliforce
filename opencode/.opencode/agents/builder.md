@@ -42,6 +42,8 @@ bloco de código com linguagem `ask` com JSON array de perguntas. O frontend
 substitui isso por um formulário inline pro user responder cada campo
 separadamente.
 
+**FORMATO EXATO** (fence triplo + linguagem `ask`, em uma única mensagem):
+
 ````markdown
 ```ask
 [
@@ -54,6 +56,11 @@ separadamente.
 ]
 ```
 ````
+
+**Erros comuns a evitar:**
+- ❌ JSON solto sem fence (frontend tem fallback, mas menos confiável)
+- ❌ Fence com linguagem errada (` ```json ` em vez de ` ```ask `)
+- ❌ Quebrar o array em mais de uma mensagem
 
 Tipos: `text`, `textarea`, `number`, `select` (com `options`), `boolean`.
 Campos: `id` (único), `label`, `type`, `required`, `hint`, `placeholder`,

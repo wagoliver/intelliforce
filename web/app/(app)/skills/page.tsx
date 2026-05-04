@@ -364,32 +364,95 @@ type AgentPart =
   | { type: "ask"; questions: AskQuestion[] };
 
 /**
- * Quebra o texto da mensagem do agente em partes — markdown normal + blocos
- * ```ask que viram <AskForm>. Block parcial (sem fechar) é tratado como
- * markdown (vai aparecer como code block aberto até completar no streaming).
+ * Quebra texto da mensagem do agente em partes: markdown + blocos `ask`.
+ *
+ * Detecção tolerante: escaneia qualquer JSON array no texto (com ou sem
+ * fence ```ask, ```json ou plain), valida se os itens têm shape de
+ * question (id + label string), e trata como ask. Se o LLM esquecer a
+ * fence, a heurística pega assim mesmo.
+ *
+ * Streaming: arrays incompletos não são detectados (bracket scanner falha
+ * em achar `]` correspondente), então renderiza como markdown — quando o
+ * streaming completar, o array fecha e vira form.
  */
 function splitAgentMessage(source: string): AgentPart[] {
-  const re = /```ask\s*\n([\s\S]*?)\n```/g;
-  const parts: AgentPart[] = [];
-  let last = 0;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(source)) !== null) {
-    if (m.index > last) parts.push({ type: "markdown", content: source.slice(last, m.index) });
-    try {
-      const parsed = JSON.parse(m[1]);
-      if (Array.isArray(parsed)) {
-        parts.push({ type: "ask", questions: parsed as AskQuestion[] });
-      } else {
-        parts.push({ type: "markdown", content: m[0] });
+  type Range = { start: number; end: number; questions: AskQuestion[] };
+  const ranges: Range[] = [];
+
+  let i = 0;
+  while (i < source.length) {
+    if (source[i] === "[") {
+      const closeIdx = findMatchingBracket(source, i);
+      if (closeIdx > i) {
+        const candidate = source.slice(i, closeIdx + 1);
+        try {
+          const parsed = JSON.parse(candidate);
+          if (Array.isArray(parsed) && parsed.length > 0 && parsed.every(isAskQuestion)) {
+            ranges.push({ start: i, end: closeIdx + 1, questions: parsed as AskQuestion[] });
+            i = closeIdx + 1;
+            continue;
+          }
+        } catch {
+          /* não é JSON válido, segue scan */
+        }
       }
-    } catch {
-      parts.push({ type: "markdown", content: m[0] });
     }
-    last = re.lastIndex;
+    i++;
   }
-  if (last < source.length) parts.push({ type: "markdown", content: source.slice(last) });
-  if (parts.length === 0) parts.push({ type: "markdown", content: source });
+
+  if (ranges.length === 0) return [{ type: "markdown", content: source }];
+
+  const parts: AgentPart[] = [];
+  let cursor = 0;
+  for (const r of ranges) {
+    if (r.start > cursor) {
+      // Pré-texto: remove fence aberta imediatamente antes (```ask\n, ```json\n, ```\n)
+      let pre = source.slice(cursor, r.start);
+      pre = pre.replace(/```[a-zA-Z]*\s*\n?\s*$/u, "");
+      if (pre.trim().length > 0) parts.push({ type: "markdown", content: pre });
+    }
+    parts.push({ type: "ask", questions: r.questions });
+    cursor = r.end;
+    // Pula fence de fechamento imediatamente após (\n``` ou ``` no final)
+    const after = source.slice(cursor);
+    const closeMatch = after.match(/^\s*```\s*\n?/u);
+    if (closeMatch) cursor += closeMatch[0].length;
+  }
+  if (cursor < source.length) {
+    const tail = source.slice(cursor);
+    if (tail.trim().length > 0) parts.push({ type: "markdown", content: tail });
+  }
   return parts;
+}
+
+function findMatchingBracket(source: string, start: number): number {
+  let depth = 1;
+  let i = start + 1;
+  let inString = false;
+  let escape = false;
+  while (i < source.length) {
+    const c = source[i];
+    if (inString) {
+      if (escape) escape = false;
+      else if (c === "\\") escape = true;
+      else if (c === '"') inString = false;
+    } else {
+      if (c === '"') inString = true;
+      else if (c === "[") depth++;
+      else if (c === "]") {
+        depth--;
+        if (depth === 0) return i;
+      }
+    }
+    i++;
+  }
+  return -1;
+}
+
+function isAskQuestion(o: unknown): boolean {
+  if (!o || typeof o !== "object") return false;
+  const r = o as Record<string, unknown>;
+  return typeof r.id === "string" && typeof r.label === "string";
 }
 
 function MessageBubble({

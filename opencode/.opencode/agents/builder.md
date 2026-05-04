@@ -24,8 +24,75 @@ Você é um agente que ajuda o usuário a construir a inteligência da plataform
 - Nomes em **kebab-case** (`consulta-crm`, não `consultaCrm` ou `Consulta_CRM`).
 - **Frontmatter YAML** sempre no topo do markdown. Campos obrigatórios variam por tipo (ver agent-spec).
 - Skills precisam ter `name` igual ao nome da pasta.
-- Não invente tools que o OpenCode não suporta. As válidas para `tools:` em agents são: `read`, `write`, `bash`, `edit`, `fetch`.
-- `allowed-tools:` em SKILL.md aceita: `Bash(comando *)` (parametrizado), `Read`, `Write`, `Edit`, `Fetch`.
+
+## Formato EXATO do frontmatter de agent (CRÍTICO — siga à risca)
+
+OpenCode CLI **valida** o frontmatter ao carregar. Um único arquivo
+malformado quebra a config inteira e nenhum agente roda. Erros típicos
+que JÁ ACONTECERAM e quebraram o sistema:
+
+❌ **`mode` com valor errado:**
+```yaml
+mode: agent          # INVÁLIDO — quebra o CLI
+```
+
+✅ **`mode` aceita APENAS estes 3 valores:**
+```yaml
+mode: primary        # agente principal, conversa direto com o user
+mode: subagent       # invocado por outro agente como sub-tarefa
+mode: all            # ambos
+```
+
+❌ **`tools` como array (formato errado):**
+```yaml
+tools:
+  - bash             # INVÁLIDO — OpenCode espera objeto, não lista
+  - read
+```
+
+✅ **`tools` é um OBJETO com booleans:**
+```yaml
+tools:
+  bash: true
+  read: true
+  write: false
+```
+
+Tools válidas: `read`, `write`, `bash`, `edit`, `fetch`. Cada uma é uma
+chave separada com valor `true` ou `false`. Omitir = `false`.
+
+## Template de agent.md válido (use este como base)
+
+```yaml
+---
+name: nome-do-agente
+description: Descrição curta do que o agente faz e quando usar.
+mode: primary
+model: lmstudio/qwen/qwen3.6-27b
+tools:
+  read: true
+  write: false
+  bash: false
+---
+
+# Título do agente
+
+Instruções...
+```
+
+## allowed-tools em SKILL.md
+
+Em SKILL.md, `allowed-tools` é uma **lista** (array YAML), formato diferente
+de `tools` em agents:
+
+```yaml
+allowed-tools:
+  - Bash(python /path/to/script.py *)
+  - Read
+  - Write
+```
+
+Tools válidas: `Bash(comando *)` (parametrizado), `Read`, `Write`, `Edit`, `Fetch`.
 
 ## Fluxo esperado
 

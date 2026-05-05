@@ -847,7 +847,7 @@ function LiveSpinner({ reducedMotion }: { reducedMotion: boolean }) {
  *     layout="position" cuida do movimento)
  *
  * Após streaming terminar:
- *   - Colapsa automaticamente em "💭 ver pensamento (N chunks)"
+ *   - Colapsa automaticamente em "▸ Ver raciocínio (N chunks)"
  *   - Click expande lista completa (todos os chunks com fullText)
  */
 function ReasoningStream({
@@ -916,9 +916,9 @@ function ReasoningStream({
           {expandedAfterFinish ? "▾" : "▸"}
         </span>
         <span className="skills-reasoning-toggle-label">
-          💭 {lines.length === 1
-            ? "Ver pensamento (1 chunk)"
-            : `Ver pensamento (${lines.length} chunks)`}
+          {lines.length === 1
+            ? "Ver raciocínio (1 chunk)"
+            : `Ver raciocínio (${lines.length} chunks)`}
         </span>
       </button>
       {expandedAfterFinish && (

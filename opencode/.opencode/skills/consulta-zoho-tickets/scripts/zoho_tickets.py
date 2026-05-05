@@ -2,15 +2,27 @@
 """
 Consulta tickets abertos N1/N2 no Zoho Desk.
 Busca credenciais no Vault, renova token em memória, retorna JSON.
+
+Uso:
+  python zoho_tickets.py
+  python zoho_tickets.py --since 2026-05-04T10:00:00Z
+
+`--since` filtra tickets com createdTime > timestamp ISO 8601 — útil
+pra workflows recorrentes (cron) que processam só tickets novos sem
+duplicar trabalho. Filtro é aplicado em memória após o fetch
+(simplicidade > performance — Zoho `where` server-side tem sintaxe
+quebradiça entre versões).
 """
+import argparse
 import json
 import os
 import re
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timezone
 
-import requests
+import httpx as requests   # alias pra preservar code-style; `httpx.get/post` é drop-in compat
 
 # ──────────────────────────────────────────
 # Configurações estáticas
@@ -50,6 +62,17 @@ def strip_html(text: str) -> str:
     text = re.sub(r"<[^>]+>", " ", text)
     text = re.sub(r"\s+", " ", text)
     return text.strip()
+
+
+def parse_iso(s: str) -> datetime:
+    """Parse ISO 8601 tolerante — aceita 'Z' como sufixo UTC e força tzinfo
+    se ausente. Lança ValueError pra strings malformadas."""
+    if s.endswith("Z"):
+        s = s[:-1] + "+00:00"
+    dt = datetime.fromisoformat(s)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
 
 
 def refresh_access_token(client_id: str, client_secret: str, refresh_token: str) -> str:
@@ -151,6 +174,27 @@ def fetch_agents(access_token: str) -> dict:
 # Main
 # ──────────────────────────────────────────
 def main():
+    parser = argparse.ArgumentParser(
+        description="Consulta tickets abertos N1/N2 no Zoho Desk.",
+    )
+    parser.add_argument(
+        "--since",
+        default=None,
+        help=(
+            "ISO 8601 (ex: 2026-05-04T10:00:00Z). Filtra tickets com "
+            "createdTime > este valor. Sem flag: retorna todos os abertos N1/N2."
+        ),
+    )
+    args = parser.parse_args()
+
+    since_dt: datetime | None = None
+    if args.since:
+        try:
+            since_dt = parse_iso(args.since)
+        except ValueError as e:
+            print(f"INVALID_SINCE: '{args.since}' não é ISO 8601 válido — {e}", file=sys.stderr)
+            sys.exit(2)
+
     # 1. Credenciais do Vault (secret multi-campo `zoho`)
     creds = get_vault_credentials("zoho")
     client_id     = creds["client_id"]
@@ -180,11 +224,23 @@ def main():
             if result:
                 detalhes.append(result)
 
-    # 6. Filtra N1/N2
-    filtrados = [
-        t for t in detalhes
-        if (t.get("cf") or {}).get("cf_nivel_de_suporte") in ("N1", "N2")
-    ]
+    # 6. Filtra N1/N2 + (opcional) since
+    def passa_filtros(t: dict) -> bool:
+        if (t.get("cf") or {}).get("cf_nivel_de_suporte") not in ("N1", "N2"):
+            return False
+        if since_dt is not None:
+            created_str = t.get("createdTime")
+            if not created_str:
+                return False  # sem timestamp não dá pra comparar — descarta
+            try:
+                created_dt = parse_iso(created_str)
+            except ValueError:
+                return False  # timestamp malformado vindo do Zoho — descarta
+            if created_dt <= since_dt:
+                return False
+        return True
+
+    filtrados = [t for t in detalhes if passa_filtros(t)]
 
     # 7. Ordena por ticketNumber decrescente
     filtrados.sort(key=lambda x: int(x.get("ticketNumber", 0)), reverse=True)

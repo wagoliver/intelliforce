@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { AskForm, type AskQuestion } from "./components/AskForm";
 import { EmptyState } from "./components/EmptyState";
+import { NeuralRibbons } from "./components/NeuralRibbons";
 import { FileTree } from "./components/FileTree";
 import { MarkdownView } from "./components/MarkdownView";
 import { SkillDrawer } from "./components/SkillDrawer";
@@ -218,6 +219,10 @@ export default function SkillsPage() {
         />
 
         <main className="skills-main">
+          {/* Fitas neurais ambiente — sempre presente, mais sutil quando há
+              mensagens (não competir com texto). */}
+          <NeuralRibbons dimmed={state.messages.length > 0 || state.isStreaming} />
+
           <header className="skills-header">
             <div className="skills-header-row">
               <div>

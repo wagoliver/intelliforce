@@ -335,8 +335,15 @@
   flex: 1;
   display: flex; flex-direction: column;
   min-width: 0;
-  position: relative;
+  position: relative;       /* ancora o canvas .skills-neural-ribbons */
   padding: 0;
+}
+
+/* Garantia: conteúdo do main fica SEMPRE acima do canvas ambiente.
+   Targeta filhos diretos exceto o próprio canvas. */
+.skills-main > :not(.skills-neural-ribbons) {
+  position: relative;
+  z-index: 1;
 }
 
 /* =============================================================================
@@ -354,8 +361,9 @@
   overflow: hidden;
 }
 
-/* Canvas das fitas neurais — ocupa o background inteiro do empty state.
-   Mascarado em radial pra fadear nas bordas (foco no centro). */
+/* Canvas das fitas neurais — ambiente do <main> inteiro (atrás de header,
+   chat e composer). Mask radial fadea nas bordas pra foco no centro.
+   z-index 0 fica atrás de todo conteúdo (header/chat são z-index >= 1). */
 .skills-neural-ribbons {
   position: absolute;
   inset: 0;
@@ -363,8 +371,8 @@
   height: 100%;
   pointer-events: none;
   z-index: 0;
-  -webkit-mask-image: radial-gradient(ellipse 80% 70% at center, black 35%, transparent 90%);
-          mask-image: radial-gradient(ellipse 80% 70% at center, black 35%, transparent 90%);
+  -webkit-mask-image: radial-gradient(ellipse 90% 80% at center, black 25%, transparent 95%);
+          mask-image: radial-gradient(ellipse 90% 80% at center, black 25%, transparent 95%);
 }
 
 /* Conteúdo (headline, sub, sugestões) acima do canvas */

@@ -1,7 +1,5 @@
 "use client";
 
-import { NeuralRibbons } from "./NeuralRibbons";
-
 const SUGGESTIONS = [
   "Liste tickets abertos no Zoho Desk N1/N2",
   "Manda 'sistema online' no channel Digital Employee do Teams",
@@ -12,9 +10,6 @@ const SUGGESTIONS = [
 export function EmptyState({ onSuggestion }: { onSuggestion: (text: string) => void }) {
   return (
     <div className="skills-empty">
-      {/* Background ambient — fitas neurais inspiradas em IBM Watson */}
-      <NeuralRibbons />
-
       <div className="skills-empty-foreground">
         <div style={{ display: "flex", flexDirection: "column", gap: 12, alignItems: "center" }}>
           <h2 className="skills-empty-headline">O que vamos construir hoje?</h2>

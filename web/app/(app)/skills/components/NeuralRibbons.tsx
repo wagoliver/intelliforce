@@ -20,8 +20,11 @@ import { useEffect, useRef } from "react";
  * Theme aware: lê tokens CSS via getComputedStyle.
  * Reduced-motion: mantém última pose estática (não some).
  */
-export function NeuralRibbons() {
+export function NeuralRibbons({ dimmed = false }: { dimmed?: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const dimmedRef = useRef(dimmed);
+  // Mantém ref atualizado pra render loop ler valor mais recente sem re-criar effect
+  dimmedRef.current = dimmed;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -169,13 +172,15 @@ export function NeuralRibbons() {
         // Stroke com glow leve (só em dark — em light fica sujo)
         const colorVar = r.color === "green" ? green : cyan;
         ctx.strokeStyle = colorVar;
-        ctx.globalAlpha = r.opacity * (isDark ? 1 : 0.7);
+        // Multiplica por dim factor quando o chat tem mensagens (modo ambient)
+        const dimFactor = dimmedRef.current ? 0.28 : 1;
+        ctx.globalAlpha = r.opacity * (isDark ? 1 : 0.7) * dimFactor;
         ctx.lineWidth = r.width;
         ctx.lineCap = "round";
 
         if (isDark) {
           ctx.shadowColor = colorVar;
-          ctx.shadowBlur = 8;
+          ctx.shadowBlur = dimmedRef.current ? 4 : 8;
         } else {
           ctx.shadowBlur = 0;
         }

@@ -1,7 +1,7 @@
 """Model: Squad — equipe dentro de um departamento."""
 import uuid
 
-from sqlalchemy import ForeignKey, Integer, String
+from sqlalchemy import Boolean, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -24,5 +24,8 @@ class Squad(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
     position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
+    # Soft delete
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
     def __repr__(self) -> str:
-        return f"<Squad {self.name} dept={self.department_id}>"
+        return f"<Squad {self.name} dept={self.department_id} active={self.is_active}>"

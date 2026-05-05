@@ -1,7 +1,7 @@
 """Model: Activity — papel/role dentro de um squad (ex: Invoice validator)."""
 import uuid
 
-from sqlalchemy import ForeignKey, Integer, String
+from sqlalchemy import Boolean, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -38,5 +38,8 @@ class Activity(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     # e Agent é o "conhecimento" que pode ser reaproveitado em activities diferentes.
     schedule: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
+    # Soft delete
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
     def __repr__(self) -> str:
-        return f"<Activity {self.name} squad={self.squad_id}>"
+        return f"<Activity {self.name} squad={self.squad_id} active={self.is_active}>"

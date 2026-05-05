@@ -3,7 +3,7 @@ import uuid
 from decimal import Decimal
 from enum import StrEnum
 
-from sqlalchemy import ForeignKey, Numeric, String, Text
+from sqlalchemy import Boolean, ForeignKey, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -37,5 +37,8 @@ class Department(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         String(16), nullable=False, default=DepartmentHealth.HEALTHY.value
     )
 
+    # Soft delete: DELETE marca como False; listagens default filtram
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
     def __repr__(self) -> str:
-        return f"<Department {self.name}>"
+        return f"<Department {self.name} active={self.is_active}>"

@@ -112,15 +112,21 @@ async def _serialize_department(db: AsyncSession, dept: Department) -> Departmen
 
 
 async def _load_department(db: AsyncSession, department_id: uuid.UUID) -> Department:
-    """Carrega Department + squads + activities (sem ORM relationships, manual)."""
+    """Carrega Department + squads ativos + activities ativas (sem ORM
+    relationships, manual). Filtra is_active=true em squads e activities pra
+    consistência com soft delete (inativos somem da árvore)."""
     dept_result = await db.execute(select(Department).where(Department.id == department_id))
     dept = dept_result.scalar_one_or_none()
     if not dept:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Department não encontrado")
-    squads_result = await db.execute(select(Squad).where(Squad.department_id == dept.id))
+    squads_result = await db.execute(
+        select(Squad).where(Squad.department_id == dept.id, Squad.is_active.is_(True))
+    )
     dept.squads = list(squads_result.scalars().all())  # type: ignore[attr-defined]
     for squad in dept.squads:  # type: ignore[attr-defined]
-        acts = await db.execute(select(Activity).where(Activity.squad_id == squad.id))
+        acts = await db.execute(
+            select(Activity).where(Activity.squad_id == squad.id, Activity.is_active.is_(True))
+        )
         squad.activities = list(acts.scalars().all())  # type: ignore[attr-defined]
     return dept
 
@@ -165,10 +171,15 @@ async def create_department(
 
 @router.get("", response_model=list[DepartmentOut])
 async def list_departments(
+    include_inactive: bool = False,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[DepartmentOut]:
-    result = await db.execute(select(Department).order_by(Department.created_at))
+    """Lista departments. Default só ativos — `?include_inactive=true` retorna todos."""
+    stmt = select(Department).order_by(Department.created_at)
+    if not include_inactive:
+        stmt = stmt.where(Department.is_active.is_(True))
+    result = await db.execute(stmt)
     depts = list(result.scalars().all())
     out = []
     for dept in depts:
@@ -222,20 +233,23 @@ async def delete_department(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> Response:
+    """Soft delete — marca department como inativo. Squads/activities/agents
+    referenciando preservam audit. Idempotente."""
     result = await db.execute(select(Department).where(Department.id == department_id))
     dept = result.scalar_one_or_none()
-    if not dept:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Department não encontrado")
+    if not dept or not dept.is_active:
+        # Não existe OU já estava inativo — sucesso silencioso
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
+    dept.is_active = False
     bus = EventBus(db)
     await bus.emit(
         type="department.deleted",
         aggregate_id=str(dept.id),
         aggregate_type="department",
-        payload={"name": dept.name},
+        payload={"name": dept.name, "reason": "soft_delete"},
         metadata={"actor": str(user.id)},
     )
-    await db.delete(dept)
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -308,13 +322,23 @@ async def delete_squad(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> Response:
+    """Soft delete — marca squad como inativo. Activities preservam audit. Idempotente."""
     result = await db.execute(
         select(Squad).where(Squad.id == squad_id, Squad.department_id == department_id)
     )
     squad = result.scalar_one_or_none()
-    if not squad:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Squad não encontrado")
-    await db.delete(squad)
+    if not squad or not squad.is_active:
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    squad.is_active = False
+    bus = EventBus(db)
+    await bus.emit(
+        type="squad.deleted",
+        aggregate_id=str(squad.id),
+        aggregate_type="squad",
+        payload={"name": squad.name, "reason": "soft_delete"},
+        metadata={"actor": str(user.id)},
+    )
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -392,12 +416,22 @@ async def delete_activity(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> Response:
+    """Soft delete — marca activity como inativa. Tasks/instances preservam audit. Idempotente."""
     result = await db.execute(
         select(Activity).where(Activity.id == activity_id, Activity.squad_id == squad_id)
     )
     activity = result.scalar_one_or_none()
-    if not activity:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Activity não encontrada")
-    await db.delete(activity)
+    if not activity or not activity.is_active:
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    activity.is_active = False
+    bus = EventBus(db)
+    await bus.emit(
+        type="activity.deleted",
+        aggregate_id=str(activity.id),
+        aggregate_type="activity",
+        payload={"name": activity.name, "reason": "soft_delete"},
+        metadata={"actor": str(user.id)},
+    )
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

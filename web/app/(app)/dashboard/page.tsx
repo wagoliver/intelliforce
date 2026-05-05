@@ -75,18 +75,21 @@ function formatRelative(iso: string | null, t: any): string {
 }
 
 
+// Cores ajustadas (compartilhadas entre tile, mini-bar, legenda).
+// Verde forte = executando · verde pastel = pronto/idle · magenta = awaiting human · cinza = offline/pending · vermelho = error.
+const AGENT_COLORS: Record<string, string> = {
+  active: "oklch(0.48 0.20 155)",
+  running: "oklch(0.48 0.20 155)",
+  idle: "oklch(0.86 0.06 165)",
+  offline: "oklch(0.78 0.005 250)",
+  pending: "oklch(0.78 0.005 250)",
+  awaiting_approval: "oklch(0.58 0.18 290)",
+  error: "var(--danger)",
+};
+
 function AgentTile({ status = "active", size = 14, skill }: any) {
-  const colors: any = {
-    active: "oklch(0.48 0.20 155)",        // verde forte — executando agora
-    idle: "oklch(0.86 0.06 165)",          // verde pastel — pronto, sem tarefa
-    offline: "oklch(0.78 0.005 250)",      // cinza — desligado
-    error: "var(--danger)",                // vermelho — quebrado
-    pending: "oklch(0.78 0.005 250)",      // cinza
-    awaiting_approval: "oklch(0.58 0.18 290)", // roxo magenta — precisa atenção humana
-    running: "oklch(0.48 0.20 155)",
-  };
   return (
-    <div className="agent-tile" style={{ width: size, height: size, color: colors[status] }} title={`${skill || "agent"} · ${status}`}>
+    <div className="agent-tile" style={{ width: size, height: size, color: AGENT_COLORS[status] }} title={`${skill || "agent"} · ${status}`}>
       <svg viewBox="0 0 64 64">
         <path d="M10 10 H54 V54 H10 Z M22 22 V42 H42 V22 Z" fill="currentColor" fillRule="evenodd" />
       </svg>
@@ -126,11 +129,107 @@ const Ico: any = {
   edit: <g stroke="currentColor" strokeWidth="1.4" fill="none" strokeLinecap="round" strokeLinejoin="round"><path d="M3 13l1-3 7-7 2 2-7 7-3 1z"/></g>,
   plus: <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" fill="none"/>,
   cron: <g stroke="currentColor" strokeWidth="1.4" fill="none" strokeLinecap="round"><circle cx="8" cy="8" r="5.5"/><path d="M8 5v3l2 2"/></g>,
+  pin: <path d="M8 1.5l1.5 4 4 .6-3 2.8.7 4L8 11l-3.2 1.9.7-4-3-2.8 4-.6L8 1.5z" stroke="currentColor" strokeWidth="1.3" fill="none" strokeLinejoin="round"/>,
+  pinFilled: <path d="M8 1.5l1.5 4 4 .6-3 2.8.7 4L8 11l-3.2 1.9.7-4-3-2.8 4-.6L8 1.5z" fill="currentColor" stroke="currentColor" strokeWidth="1" strokeLinejoin="round"/>,
 };
 
 const SvgIcon = ({ name, ...rest }: any) => (
   <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" {...rest}>{Ico[name]}</svg>
 );
+
+// Barra horizontal proporcional dos agentes do dept (substitui o grid completo na linha colapsada).
+function MiniAgentBar({ agents }: { agents: any }) {
+  const segs = [
+    { key: "active", v: agents.active, color: AGENT_COLORS.active },
+    { key: "idle", v: agents.idle, color: AGENT_COLORS.idle },
+    { key: "offline", v: agents.offline, color: AGENT_COLORS.offline },
+    { key: "error", v: agents.error, color: AGENT_COLORS.error },
+  ].filter((s) => s.v > 0);
+  return (
+    <div
+      className="mini-bar"
+      title={`${agents.active} active · ${agents.idle} idle · ${agents.offline} offline · ${agents.error} error`}
+    >
+      {segs.map((s) => (
+        <div key={s.key} className="mini-bar-seg" style={{ flex: s.v, background: s.color }} />
+      ))}
+    </div>
+  );
+}
+
+// Sparkline compacta da timeline 12h (usada no header colapsado).
+function MiniSparkline({ data, health }: { data: TimelineBucket[]; health: string }) {
+  const w = 140, h = 28;
+  const totals = data.map((b) => (b.completed || 0) + (b.failed || 0));
+  const max = Math.max(1, ...totals);
+  const barW = (w - (data.length - 1) * 2) / data.length;
+  const successColor = health === "attention" ? "var(--warning)" : "var(--accent-green)";
+  const failColor = "var(--danger)";
+  return (
+    <svg className="sparkline" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ width: w, height: h }}>
+      {data.map((b, i) => {
+        const total = (b.completed || 0) + (b.failed || 0);
+        if (total === 0) return null;
+        const totalH = Math.max(2, (total / max) * (h - 2));
+        const failH = ((b.failed || 0) / total) * totalH;
+        const okH = totalH - failH;
+        const x = i * (barW + 2);
+        return (
+          <g key={i}>
+            {failH > 0 && <rect x={x} y={h - failH} width={barW} height={failH} fill={failColor} opacity={0.85} rx={1} />}
+            {okH > 0 && <rect x={x} y={h - failH - okH} width={barW} height={okH} fill={successColor} opacity={0.4 + (total / max) * 0.6} rx={1} />}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+function FilterBar({
+  sortBy, onSort, healthFilter, onHealth, count, total,
+}: {
+  sortBy: string; onSort: (v: string) => void;
+  healthFilter: string; onHealth: (v: string) => void;
+  count: number; total: number;
+}) {
+  const t = useTranslations("dashboard");
+  const sortOpts = [
+    { id: "attention", label: t("filter_sort_attention") },
+    { id: "activities", label: t("filter_sort_activities") },
+    { id: "cost", label: t("filter_sort_cost") },
+    { id: "name", label: t("filter_sort_name") },
+  ];
+  const healthOpts = [
+    { id: "all", label: t("filter_health_all") },
+    { id: "healthy", label: t("filter_health_healthy") },
+    { id: "attention", label: t("filter_health_attention") },
+  ];
+  return (
+    <div className="filter-bar">
+      <div className="fb-group">
+        <span className="fb-label">{t("filter_show")}</span>
+        <div className="fb-pills">
+          {healthOpts.map((o) => (
+            <button key={o.id} className={`fb-pill ${healthFilter === o.id ? "active" : ""}`} onClick={() => onHealth(o.id)}>
+              {o.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="fb-group">
+        <span className="fb-label">{t("filter_sort_by")}</span>
+        <div className="fb-pills">
+          {sortOpts.map((o) => (
+            <button key={o.id} className={`fb-pill ${sortBy === o.id ? "active" : ""}`} onClick={() => onSort(o.id)}>
+              {o.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="fb-count">{t("filter_count", { count, total })}</div>
+    </div>
+  );
+}
 
 function OrgHeader({ orgList }: { orgList: any[] }) {
   const t = useTranslations("dashboard");
@@ -183,9 +282,97 @@ function OrgHeader({ orgList }: { orgList: any[] }) {
   );
 }
 
-function DepartmentRow({ dept }: any) {
+function DepartmentRow({
+  dept, expanded, pinned, onToggle, onPin,
+}: {
+  dept: any; expanded: boolean; pinned: boolean;
+  onToggle: () => void; onPin: () => void;
+}) {
   const t = useTranslations("dashboard");
-  const totalAgents = Object.values(dept.agents).reduce((a: any, b: any) => a + b, 0);
+  const totalAgents = Object.values(dept.agents).reduce((a: any, b: any) => a + b, 0) as number;
+  const executedDisplay =
+    dept.metrics.executed >= 1000
+      ? `${(dept.metrics.executed / 1000).toFixed(1)}k`
+      : dept.metrics.executed.toLocaleString();
+  const healthLabel = dept.health === "healthy" ? t("on_track") : t("needs_attention");
+
+  return (
+    <section
+      className={`dept dept--${dept.health} ${expanded ? "is-open" : ""} ${pinned ? "is-pinned" : ""}`}
+      onMouseMove={(e) => {
+        const target = e.currentTarget as HTMLElement;
+        const rect = target.getBoundingClientRect();
+        target.style.setProperty("--mx", `${e.clientX - rect.left}px`);
+        target.style.setProperty("--my", `${e.clientY - rect.top}px`);
+      }}
+    >
+      {/* Linha colapsada — sempre visível */}
+      <button
+        type="button"
+        className="dept-row-head"
+        onClick={onToggle}
+        aria-expanded={expanded}
+        aria-label={expanded ? t("collapse") : t("expand")}
+      >
+        <div className="drh-mark">
+          <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+            <path d="M10 10 H54 V54 H10 Z M22 22 V42 H42 V22 Z" fill="currentColor" fillRule="evenodd" />
+          </svg>
+        </div>
+        <div className="drh-name">
+          <div className="drh-name-row">
+            <span className="dept-name-compact">{dept.name}</span>
+            {dept.agents.error > 0 && (
+              <span className="drh-error-pip">{t("error_short", { n: dept.agents.error })}</span>
+            )}
+          </div>
+          <div className={`dept-health dept-health--${dept.health}`}>
+            <span className="dot" /> {healthLabel}
+          </div>
+        </div>
+        <div className="drh-owner">
+          <SvgIcon className="ico" name="user" />
+          <div>
+            <div className="drh-owner-name">{dept.owner.name}</div>
+            {dept.owner.role && <div className="drh-owner-role">{dept.owner.role}</div>}
+          </div>
+        </div>
+        <div className="drh-bar">
+          <MiniAgentBar agents={dept.agents} />
+          <span className="drh-bar-count">
+            <strong>{dept.agents.active}</strong>
+            <span className="muted"> / {totalAgents} {t("bar_active_lower")}</span>
+          </span>
+        </div>
+        <div className="drh-kpi">
+          <div className="drh-kpi-text">
+            <div className="drh-kpi-v">{executedDisplay}</div>
+            <div className="drh-kpi-l">{t("kpi_activities_12h")}</div>
+          </div>
+          <MiniSparkline data={dept.metrics.timeline} health={dept.health} />
+        </div>
+        <div className="drh-actions">
+          <span
+            className={`drh-pin ${pinned ? "is-pinned" : ""}`}
+            onClick={(e) => { e.stopPropagation(); onPin(); }}
+            title={pinned ? t("unpin") : t("pin_to_top")}
+          >
+            <SvgIcon className="ico" name={pinned ? "pinFilled" : "pin"} />
+          </span>
+          <span className="drh-chev"><SvgIcon className="ico" name="chev" /></span>
+        </div>
+      </button>
+
+      {expanded && <DepartmentDossier dept={dept} />}
+    </section>
+  );
+}
+
+// Dossiê expandido — código equivalente ao DepartmentRow original.
+// Histórico/AlphaDots só fazem fetch enquanto este componente está montado (aberto).
+function DepartmentDossier({ dept }: any) {
+  const t = useTranslations("dashboard");
+  const totalAgents = Object.values(dept.agents).reduce((a: any, b: any) => a + b, 0) as number;
   const tiles = useMemo(() => buildAgentArray(dept.agents), [dept.id]);
   const historyState = useState(null);
   const history = historyState[0];
@@ -203,32 +390,8 @@ function DepartmentRow({ dept }: any) {
   }, [dept.id]);
 
   return (
-    <section
-      className={`dept dept--${dept.health}`}
-      onMouseMove={(e) => {
-        const target = e.currentTarget as HTMLElement;
-        const rect = target.getBoundingClientRect();
-        target.style.setProperty("--mx", `${e.clientX - rect.left}px`);
-        target.style.setProperty("--my", `${e.clientY - rect.top}px`);
-      }}
-    >
+    <div className="dept-dossier">
       <div className="dept-left">
-        <div className="dept-id">
-          <h2 className="dept-name">{dept.name}</h2>
-          <div className={`dept-health dept-health--${dept.health}`}>
-            <span className="dot" />
-            {dept.health === "healthy" ? t("on_track") : t("needs_attention")}
-          </div>
-          <a
-            className="dept-edit"
-            href={`/skills?cmd=edit-dept&id=${dept.id}`}
-            title="Conversa com o Operator pra editar"
-          >
-            <SvgIcon className="ico" name="edit" />
-            {t("edit")}
-          </a>
-        </div>
-
         <div className="dept-meta">
           <div className="dm-row">
             <SvgIcon className="dm-icon" name="user" />
@@ -269,6 +432,14 @@ function DepartmentRow({ dept }: any) {
             </div>
           </div>
         </div>
+        <a
+          className="dept-edit-btn"
+          href={`/skills?cmd=edit-dept&id=${dept.id}`}
+          title="Conversa com o Operator pra editar"
+        >
+          <SvgIcon className="ico" name="edit" />
+          {t("edit")}
+        </a>
       </div>
 
       <div className="dept-mid">
@@ -344,7 +515,7 @@ function DepartmentRow({ dept }: any) {
           <Timeline data={dept.metrics.timeline} health={dept.health} />
         </div>
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -551,10 +722,16 @@ function AlphaDots({ activityId }: { activityId: string }) {
 }
 
 export default function HomeV2Page() {
-  const orgState = useState(null);
+  const orgState = useState<any[] | null>(null);
   const orgData = orgState[0];
   const setOrgData = orgState[1];
   const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [pinned, setPinned] = useState<Set<string>>(new Set());
+  const [sortBy, setSortBy] = useState<string>("attention");
+  const [healthFilter, setHealthFilter] = useState<string>("all");
+  // Track quais ids já foram auto-expandidos pra não reabrir depois que o user fechou.
+  const [autoSeen, setAutoSeen] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     let cancelled = false;
@@ -579,7 +756,72 @@ export default function HomeV2Page() {
     return () => { cancelled = true; clearInterval(interval); };
   }, []);
 
+  // Auto-expand depts em atenção ou com erro — só uma vez por id (não reabre se o user fechou).
+  useEffect(() => {
+    if (!orgData) return;
+    setAutoSeen((prevSeen) => {
+      const newlySeen = new Set(prevSeen);
+      const toOpen: string[] = [];
+      for (const d of orgData) {
+        if (prevSeen.has(d.id)) continue;
+        if (d.health === "attention" || d.agents.error > 0) toOpen.push(d.id);
+        newlySeen.add(d.id);
+      }
+      if (toOpen.length > 0) {
+        setExpanded((prev) => {
+          const next = new Set(prev);
+          for (const id of toOpen) next.add(id);
+          return next;
+        });
+      }
+      return newlySeen;
+    });
+  }, [orgData]);
+
+  const toggleExpand = (id: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const togglePin = (id: string) => {
+    setPinned((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+        // pinning também expande
+        setExpanded((p) => { const ns = new Set(p); ns.add(id); return ns; });
+      }
+      return next;
+    });
+  };
+
   const orgList = orgData ?? [];
+
+  const visibleList = useMemo(() => {
+    let list = orgList;
+    if (healthFilter !== "all") list = list.filter((d: any) => d.health === healthFilter);
+    list = [...list].sort((a: any, b: any) => {
+      const ap = pinned.has(a.id), bp = pinned.has(b.id);
+      if (ap !== bp) return ap ? -1 : 1;
+      switch (sortBy) {
+        case "attention": {
+          const order: Record<string, number> = { attention: 0, healthy: 1 };
+          if (a.health !== b.health) return (order[a.health] ?? 9) - (order[b.health] ?? 9);
+          return (b.metrics?.executed ?? 0) - (a.metrics?.executed ?? 0);
+        }
+        case "activities": return (b.metrics?.executed ?? 0) - (a.metrics?.executed ?? 0);
+        case "cost": return (b.cost?.monthly ?? 0) - (a.cost?.monthly ?? 0);
+        case "name": return a.name.localeCompare(b.name);
+        default: return 0;
+      }
+    });
+    return list;
+  }, [orgList, healthFilter, sortBy, pinned]);
 
   return (
     <>
@@ -587,9 +829,28 @@ export default function HomeV2Page() {
       {loading && <DashboardLoading />}
       {!loading && orgList.length === 0 && <EmptyState />}
       {!loading && orgList.length > 0 && (
-        <div className="dept-list">
-          {orgList.map((d: any) => <DepartmentRow key={d.id} dept={d} />)}
-        </div>
+        <>
+          <FilterBar
+            sortBy={sortBy}
+            onSort={setSortBy}
+            healthFilter={healthFilter}
+            onHealth={setHealthFilter}
+            count={visibleList.length}
+            total={orgList.length}
+          />
+          <div className="dept-list">
+            {visibleList.map((d: any) => (
+              <DepartmentRow
+                key={d.id}
+                dept={d}
+                expanded={expanded.has(d.id)}
+                pinned={pinned.has(d.id)}
+                onToggle={() => toggleExpand(d.id)}
+                onPin={() => togglePin(d.id)}
+              />
+            ))}
+          </div>
+        </>
       )}
     </>
   );

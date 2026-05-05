@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
+import { GlobalSearch } from "@/components/search/global-search";
 import { UserMenu } from "@/components/user-menu";
 
 import "./app-shell.css";
@@ -175,6 +176,7 @@ function TopBar() {
   return (
     <div className="topbar">
       <div className="tb-page-title">{title}</div>
+      <GlobalSearch />
       <div className="tb-actions">
         <FullscreenButton />
         <div className="tb-divider" />

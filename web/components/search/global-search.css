@@ -1,0 +1,205 @@
+/* =============================================================================
+ * Global Search — input no TopBar com dropdown de resultados agrupados
+ * ============================================================================= */
+
+.gs-container {
+  position: relative;
+  flex: 1;
+  max-width: 480px;
+  margin: 0 16px;
+}
+
+.gs-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 12px;
+  background: var(--bg-sunken);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--text-subtle);
+  transition: all 140ms ease;
+}
+.gs-input-wrap.is-active {
+  border-color: var(--accent);
+  background: var(--bg-panel, var(--bg-elev));
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 15%, transparent);
+}
+
+.gs-icon {
+  flex-shrink: 0;
+  color: var(--text-subtle);
+}
+.gs-input-wrap.is-active .gs-icon {
+  color: var(--accent);
+}
+
+.gs-input {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+  min-width: 0;
+}
+.gs-input::placeholder {
+  color: var(--text-subtle);
+}
+
+.gs-kbd {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text-subtle);
+  flex-shrink: 0;
+}
+
+/* ── Dropdown ─────────────────────────────────────────────────────────── */
+
+.gs-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
+  max-height: 480px;
+  overflow-y: auto;
+  z-index: 1000;
+  padding: 6px;
+  animation: gs-dropdown-in 160ms ease-out;
+}
+@keyframes gs-dropdown-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.gs-status {
+  padding: 14px 12px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  text-align: center;
+}
+.gs-status--error {
+  color: var(--danger);
+}
+
+.gs-group {
+  padding: 4px 0;
+}
+.gs-group + .gs-group {
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+  padding-top: 8px;
+}
+
+.gs-group-label {
+  padding: 4px 12px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+.gs-result {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 6px;
+  text-align: left;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text);
+  transition: background 100ms ease;
+}
+.gs-result.is-highlighted,
+.gs-result:hover {
+  background: var(--bg-hover, color-mix(in oklab, var(--accent) 8%, transparent));
+}
+
+.gs-result-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  flex-shrink: 0;
+  background: var(--bg-sunken);
+}
+.gs-result-icon--department {
+  background: color-mix(in oklab, var(--accent) 18%, var(--bg-sunken));
+  color: var(--accent);
+}
+.gs-result-icon--agent {
+  background: color-mix(in oklab, var(--accent-cyan, #06b6d4) 18%, var(--bg-sunken));
+  color: var(--accent-cyan, #06b6d4);
+}
+.gs-result-icon--activity {
+  background: color-mix(in oklab, var(--warning, #eab308) 18%, var(--bg-sunken));
+  color: var(--warning, #eab308);
+}
+.gs-result-icon--skill {
+  background: color-mix(in oklab, var(--accent) 22%, var(--bg-sunken));
+  color: var(--accent);
+}
+
+.gs-result-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+
+.gs-result-title {
+  font-weight: 500;
+  color: var(--text);
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.gs-result-subtitle {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.gs-result-slug {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-subtle);
+  flex-shrink: 0;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+}
+.gs-result.is-highlighted .gs-result-slug {
+  border-color: color-mix(in oklab, var(--accent) 35%, var(--border));
+}
+
+/* Dark mode tweaks (já que /skills tem theme próprio, mas search vive no
+   AppShell global — herdaremos via :root tokens) */
+.dark .gs-dropdown {
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}

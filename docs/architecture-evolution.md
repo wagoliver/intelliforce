@@ -225,6 +225,8 @@ Surgidos das discussões. Quando estiver em dúvida, volte aqui:
 
 7. **Configuração declarativa antes de código imperativo.** Agentes, skills, comandos são markdown/JSON. Código Python só pra plataforma. Dev de domínio não precisa programar.
 
+8. **Soft delete em entidades referenciadas por audit.** Toda entidade que é apontada por FK de tabelas event-sourced (tasks, events, audit logs, etc.) usa soft delete (`is_active=false`) em vez de hard delete físico. Hard delete destruiria trilha de auditoria. Aplicado em: `agents`, `departments`, `squads`, `activities`. Pra remover dados de verdade (LGPD/retenção), criar task administrativa explícita que arquiva tasks históricas antes. Defesa em profundidade: middleware global no FastAPI converte `IntegrityError` (FK violation) em 409 amigável, garantindo que endpoints futuros que esquecerem o padrão não derrubem o usuário com 500.
+
 ---
 
 ## 6. Próximos passos sugeridos

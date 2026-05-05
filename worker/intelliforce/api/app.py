@@ -4,8 +4,10 @@ from __future__ import annotations
 import logging
 
 import structlog
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy.exc import IntegrityError
 
 from intelliforce.api.routes import (
     agents, approvals, audit, auth, chat, departments, health,
@@ -50,6 +52,65 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Exception handlers — converte erros de DB em respostas amigáveis em vez
+    # de 500 cego do FastAPI.
+    @app.exception_handler(IntegrityError)
+    async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSONResponse:
+        """Captura IntegrityError do SQLAlchemy (FK violation, unique constraint, etc.)
+        e converte em respostas semanticamente corretas — 409 pra conflitos.
+
+        Evita que endpoint que não trata FK violation crash com 500 anônimo.
+        Defesa em profundidade pra padrão soft-delete em entidades referenciadas.
+        """
+        # Tenta classificar pela mensagem do driver (asyncpg)
+        orig_str = str(exc.orig) if exc.orig else str(exc)
+        log.warning(
+            "api.integrity_error",
+            path=request.url.path,
+            method=request.method,
+            error_class=type(exc.orig).__name__ if exc.orig else "IntegrityError",
+            preview=orig_str[:300],
+        )
+
+        if "ForeignKeyViolation" in orig_str or "foreign key constraint" in orig_str.lower():
+            return JSONResponse(
+                status_code=409,
+                content={
+                    "detail": (
+                        "Não é possível excluir: existem registros referenciando este item. "
+                        "Use a desativação (soft delete) ou remova as dependências primeiro."
+                    ),
+                    "kind": "foreign_key_violation",
+                },
+            )
+
+        if "UniqueViolation" in orig_str or "duplicate key" in orig_str.lower():
+            return JSONResponse(
+                status_code=409,
+                content={
+                    "detail": "Já existe um registro com esse identificador único.",
+                    "kind": "unique_violation",
+                },
+            )
+
+        if "NotNullViolation" in orig_str or "null value" in orig_str.lower():
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "detail": "Campo obrigatório ausente.",
+                    "kind": "not_null_violation",
+                },
+            )
+
+        # Outros casos de IntegrityError não classificados — 409 genérico
+        return JSONResponse(
+            status_code=409,
+            content={
+                "detail": "Conflito de integridade no banco de dados.",
+                "kind": "integrity_error",
+            },
+        )
 
     # Rotas
     app.include_router(health.router)

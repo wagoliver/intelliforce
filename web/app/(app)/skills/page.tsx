@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { AskForm, type AskQuestion } from "./components/AskForm";
-import { EmptyState } from "./components/EmptyState";
+import { EmptyState, PromptSuggestions } from "./components/EmptyState";
 import { NeuralRibbons } from "./components/NeuralRibbons";
 import { FileTree } from "./components/FileTree";
 import { MarkdownView } from "./components/MarkdownView";
@@ -254,7 +254,7 @@ export default function SkillsPage() {
           </header>
 
           {state.messages.length === 0 && !state.isStreaming ? (
-            <EmptyState onSuggestion={(text) => onSubmit(text)} />
+            <EmptyState />
           ) : (
             <div ref={scrollRef} className="skills-chat" role="log" aria-live="polite" aria-atomic="false">
               <AnimatePresence initial={false}>
@@ -276,6 +276,10 @@ export default function SkillsPage() {
             <div role="alert" className="skills-error">
               {state.error}
             </div>
+          )}
+
+          {state.messages.length === 0 && !state.isStreaming && (
+            <PromptSuggestions onSelect={(text) => onSubmit(text)} />
           )}
 
           <div className="skills-composer-wrapper">

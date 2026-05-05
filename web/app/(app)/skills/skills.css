@@ -375,14 +375,38 @@
           mask-image: radial-gradient(ellipse 90% 80% at center, black 25%, transparent 95%);
 }
 
-/* Conteúdo (headline, sub, sugestões) acima do canvas */
+/* Conteúdo (headline + sub) acima do canvas. Sugestões saíram daqui pra
+   ir como linha horizontal acima do composer (ver .skills-prompt-suggestions) */
 .skills-empty-foreground {
   position: relative;
   z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 28px;
+  gap: 14px;
+  max-width: 620px;
+}
+
+/* =============================================================================
+ * Sugestões horizontais — linha logo acima do composer (padrão ChatGPT).
+ * Aparece só quando state.messages.length === 0.
+ * ============================================================================= */
+
+.skills-prompt-suggestions {
+  margin: 0 32px 12px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  position: relative;
+  z-index: 1;
+  /* Anim sutil de entrada — fade + slide curto */
+  animation: prompt-suggestions-in 320ms ease-out;
+}
+
+@keyframes prompt-suggestions-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 .skills-empty-headline {
@@ -415,11 +439,10 @@
   margin: 0;
 }
 
-.skills-suggestions {
-  display: flex; flex-wrap: wrap; gap: 8px;
-  justify-content: center;
-  max-width: 620px;
-}
+/* .skills-suggestion (singular) é usado por cada pill, dentro de
+   .skills-prompt-suggestions (linha acima do composer). O container plural
+   .skills-suggestions foi descontinuado quando movemos as pills do empty
+   state pra cima do composer. */
 .skills-suggestion {
   padding: 8px 14px;
   border: 1px solid var(--border);

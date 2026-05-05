@@ -1,0 +1,259 @@
+/* =============================================================================
+ * UserMenu — dropdown do header com preferências e info da conta.
+ * ============================================================================= */
+
+.um-dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  background: var(--bg-elev, #fff);
+  border: 1px solid var(--border, #e5e5e5);
+  border-radius: var(--radius-lg, 10px);
+  box-shadow: var(--shadow, 0 8px 24px rgba(0, 0, 0, 0.08));
+  min-width: 280px;
+  z-index: 1000;
+  padding: 4px;
+  /* Anim sutil de entrada */
+  animation: um-fade-in 160ms ease-out;
+}
+@keyframes um-fade-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Header com avatar + identidade ─────────────────────────────────────── */
+
+.um-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-bottom: 1px solid var(--border, #e5e5e5);
+}
+
+.um-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, var(--accent, #16a34a), color-mix(in oklab, var(--accent, #16a34a) 60%, blue));
+  color: #fff;
+  font-weight: 600;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.um-identity {
+  flex: 1;
+  min-width: 0;
+}
+
+.um-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text, #111);
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.um-email {
+  font-size: 11.5px;
+  color: var(--text-muted, #666);
+  margin-top: 1px;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.um-role {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--accent-soft, #f0f9f4);
+  color: var(--accent, #16a34a);
+  border: 1px solid color-mix(in oklab, var(--accent, #16a34a) 25%, var(--border, #e5e5e5));
+}
+
+/* ── Section labels ─────────────────────────────────────────────────────── */
+
+.um-section-label {
+  padding: 10px 12px 4px;
+  font-size: 10.5px;
+  color: var(--text-subtle, #999);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+/* ── Theme picker (segmented control) ───────────────────────────────────── */
+
+.um-theme-row {
+  display: flex;
+  gap: 4px;
+  padding: 0 6px 4px;
+}
+
+.um-theme-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border, #e5e5e5);
+  background: transparent;
+  color: var(--text-muted, #666);
+  cursor: pointer;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 140ms ease;
+  font-family: inherit;
+}
+.um-theme-btn:hover:not(:disabled) {
+  background: var(--bg-hover, #f5f5f5);
+  color: var(--text, #111);
+}
+.um-theme-btn[data-active="true"] {
+  border-color: var(--accent, #16a34a);
+  background: var(--accent-soft, #f0f9f4);
+  color: var(--accent, #16a34a);
+  font-weight: 600;
+}
+.um-theme-btn:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+/* ── Item genérico (idioma, links de menu) ──────────────────────────────── */
+
+.um-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--text, #111);
+  cursor: pointer;
+  border-radius: 6px;
+  font-size: 13px;
+  text-align: left;
+  font-weight: 400;
+  font-family: inherit;
+  transition: background 120ms ease;
+}
+.um-item:hover:not(:disabled) {
+  background: var(--bg-hover, #f5f5f5);
+}
+.um-item[data-active="true"] {
+  background: var(--accent-soft, #f0f9f4);
+  color: var(--accent, #16a34a);
+  font-weight: 600;
+}
+.um-item:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.um-item-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  flex-shrink: 0;
+  color: var(--text-subtle, #999);
+}
+.um-item[data-active="true"] .um-item-icon {
+  color: var(--accent, #16a34a);
+}
+
+.um-item-locale-tag {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 9.5px;
+  font-weight: 600;
+  padding: 2px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border, #e5e5e5);
+  color: var(--text-muted, #666);
+  min-width: 26px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.um-item[data-active="true"] .um-item-locale-tag {
+  border-color: var(--accent, #16a34a);
+  color: var(--accent, #16a34a);
+}
+
+.um-item-label {
+  flex: 1;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.um-item-check {
+  color: var(--accent, #16a34a);
+  flex-shrink: 0;
+}
+
+/* ── Footer (sobre + logout) ────────────────────────────────────────────── */
+
+.um-divider {
+  border-top: 1px solid var(--border, #e5e5e5);
+  margin: 4px 0;
+}
+
+.um-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 12px 4px;
+  font-size: 10.5px;
+  color: var(--text-subtle, #999);
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+.um-meta-version {
+  font-weight: 500;
+}
+.um-meta-link {
+  color: var(--text-subtle, #999);
+  text-decoration: none;
+  transition: color 120ms ease;
+}
+.um-meta-link:hover {
+  color: var(--accent, #16a34a);
+}
+
+.um-logout {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--danger, #dc2626);
+  cursor: pointer;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  text-decoration: none;
+  font-family: inherit;
+  transition: background 120ms ease;
+}
+.um-logout:hover {
+  background: color-mix(in oklab, var(--danger, #dc2626) 10%, transparent);
+}

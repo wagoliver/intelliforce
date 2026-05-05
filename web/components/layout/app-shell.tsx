@@ -103,9 +103,62 @@ function NavItem({
   );
 }
 
+function FullscreenButton() {
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    function update() {
+      setIsFullscreen(!!document.fullscreenElement);
+    }
+    document.addEventListener("fullscreenchange", update);
+    return () => document.removeEventListener("fullscreenchange", update);
+  }, []);
+
+  function toggle() {
+    if (document.fullscreenElement) {
+      void document.exitFullscreen();
+    } else {
+      void document.documentElement.requestFullscreen();
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      className="tb-iconbtn"
+      onClick={toggle}
+      title={isFullscreen ? "Sair de tela cheia" : "Tela cheia"}
+      aria-label={isFullscreen ? "Sair de tela cheia" : "Tela cheia"}
+    >
+      <svg width={16} height={16} viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+        {isFullscreen ? (
+          /* Exit fullscreen — 4 cantos convergindo pro centro */
+          <path
+            d="M6 3v3H3M13 6h-3V3M10 13v-3h3M3 10h3v3"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        ) : (
+          /* Enter fullscreen — 4 cantos divergindo */
+          <path
+            d="M3 6V3h3M10 3h3v3M13 10v3h-3M6 13H3v-3"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        )}
+      </svg>
+    </button>
+  );
+}
+
 function TopBar() {
   const tc = useTranslations("common");
-  const tn = useTranslations("nav");
   return (
     <div className="topbar">
       <div className="tb-search">
@@ -114,13 +167,7 @@ function TopBar() {
         <kbd>⌘ K</kbd>
       </div>
       <div className="tb-actions">
-        <button className="tb-iconbtn" title={tn("toggle_theme")}>
-          <SvgIcon className="ico" name="theme" />
-        </button>
-        <button className="tb-iconbtn" title={tn("notifications")}>
-          <SvgIcon className="ico" name="bell" />
-          <span className="tb-iconbtn-dot" />
-        </button>
+        <FullscreenButton />
         <div className="tb-divider" />
         <UserMenu userName={data.user.name} userOrg={data.user.org} userRole={data.user.role} />
       </div>

@@ -94,6 +94,14 @@ class Settings(BaseSettings):
     worker_concurrency: int = Field(default=3)
     worker_poll_interval_seconds: int = Field(default=1)
 
+    # JWT longo (TTL 365 dias) da service account `worker-internal`.
+    # Gerado via `python -m intelliforce.scripts.gen_worker_token`. Usado pelo
+    # TaskExecutor pra autenticar scheduled tasks contra a própria API
+    # IntelliForce (Vault, departments, etc.). Vazio = scheduled tasks que
+    # tentarem chamar a API vão falhar com TOKEN_EMPTY (warning no startup).
+    worker_token: str = Field(default="")
+    intelliforce_internal_api_url: str = Field(default="http://api:8000")
+
     # --- Task reaper (varre tasks órfãs em `running`) ---
     task_reap_check_interval_seconds: int = Field(default=60)
     task_reap_after_seconds: int = Field(default=360)

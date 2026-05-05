@@ -25,8 +25,26 @@ from intelliforce.db.models.task import Task, TaskStatus
 from intelliforce.events.bus import EventBus
 from intelliforce.events.subscriber import EventSubscriber
 from intelliforce.opencode import OpenCodeRunner
+from intelliforce.settings import get_settings
 
 log = structlog.get_logger()
+
+
+def _build_worker_extra_env() -> dict[str, str]:
+    """Monta env vars pra subprocess do OpenCode quando worker dispara task
+    scheduled. Injeta token da service account (worker-internal) pras skills
+    poderem chamar a API IntelliForce (Vault, departments, etc.).
+
+    Vazio se INTELLIFORCE_WORKER_TOKEN não configurado — skills que tentarem
+    falar com API vão falhar com TOKEN_EMPTY. Roda gen_worker_token.py + .env.
+    """
+    settings = get_settings()
+    if not settings.worker_token:
+        return {}
+    return {
+        "INTELLIFORCE_TOKEN": settings.worker_token,
+        "INTELLIFORCE_API_URL": settings.intelliforce_internal_api_url,
+    }
 
 
 class TaskExecutor(EventSubscriber):
@@ -74,12 +92,16 @@ class TaskExecutor(EventSubscriber):
 
             await self._mark_running(session, task)
 
-        # Executa OpenCode (fora da sessão pra não segurar conexão)
+        # Executa OpenCode (fora da sessão pra não segurar conexão).
+        # Injeta token da service account (worker-internal) pra skills
+        # poderem chamar a API IntelliForce internamente — sem isso, qualquer
+        # skill que faça HTTP pra Vault/api falha com TOKEN_EMPTY.
         result = await self.runner.run(
             prompt=task.prompt,
             agent=agent.name,
             model=agent.model if agent.model else None,
             session_id=task.opencode_session_id,
+            extra_env=_build_worker_extra_env(),
         )
 
         # Persiste resultado

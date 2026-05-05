@@ -14,10 +14,13 @@ class UserRole(StrEnum):
     ADMIN = "admin"
     USER = "user"
     AUDITOR = "auditor"
+    SERVICE = "service"  # contas de máquina (worker, integrações M2M)
 
 
 class User(Base, UUIDPrimaryKeyMixin, TimestampMixin):
-    """Usuário humano do sistema."""
+    """Usuário do sistema. Quando `is_service=True`, é uma conta sintética
+    (worker, cron, integração M2M) — não tem login UI, não recebe e-mail,
+    e tem papel `service` por convenção."""
 
     __tablename__ = "users"
 
@@ -28,6 +31,13 @@ class User(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         String(32), nullable=False, default=UserRole.USER.value
     )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # Service account flag — distingue contas de máquina de contas humanas.
+    # Usado pelo bootstrap do worker pra criar/garantir o user "worker-internal"
+    # idempotentemente no startup.
+    is_service: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, index=True
+    )
 
     def __repr__(self) -> str:
-        return f"<User {self.email} ({self.role})>"
+        kind = "service" if self.is_service else "user"
+        return f"<User {self.email} ({self.role}) {kind}>"

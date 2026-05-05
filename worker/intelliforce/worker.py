@@ -15,6 +15,7 @@ from contextlib import suppress
 import structlog
 
 from intelliforce.audit import AuditProjector
+from intelliforce.bootstrap import ensure_worker_service_user
 from intelliforce.db.base import async_session_factory
 from intelliforce.events import EventBus, OutboxPublisher
 from intelliforce.events.subscriber import DebugSubscriber
@@ -137,6 +138,28 @@ async def main() -> None:
         clickhouse=ch_ok,
         redis=rd_ok,
     )
+
+    # Bootstrap idempotente da service account (worker-internal). Sem isso,
+    # scheduled tasks não conseguem autenticar contra a própria API.
+    if pg_ok:
+        try:
+            await ensure_worker_service_user()
+        except Exception:
+            log.exception("worker.service_user_bootstrap_failed")
+
+    # Aviso se não há token configurado pro worker — scheduled tasks vão
+    # falhar ao tentar chamar a API. Não bloqueia startup pra não quebrar
+    # setup inicial do desenvolvedor.
+    if not settings.worker_token:
+        log.warning(
+            "worker.token_missing",
+            hint=(
+                "INTELLIFORCE_WORKER_TOKEN não setado. Scheduled tasks que "
+                "chamarem a API (Vault, departments, etc.) vão falhar com "
+                "TOKEN_EMPTY. Gere via: docker compose exec worker python "
+                "-m intelliforce.scripts.gen_worker_token"
+            ),
+        )
 
     await emit_startup_event()
 

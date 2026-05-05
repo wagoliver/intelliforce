@@ -77,8 +77,14 @@ class OpenCodeRunner:
         continue_session: bool = False,
         timeout_seconds: int | None = None,
         extra_args: list[str] | None = None,
+        extra_env: dict[str, str] | None = None,
     ) -> OpenCodeResult:
-        """Executa OpenCode com o prompt dado. Retorna OpenCodeResult."""
+        """Executa OpenCode com o prompt dado. Retorna OpenCodeResult.
+
+        `extra_env`: env vars adicionais propagadas pro subprocess. Usado
+        pra injetar INTELLIFORCE_TOKEN do user logado (chat) ou da service
+        account (worker scheduled tasks) sem mexer no env do worker host.
+        """
         cmd = self._build_command(
             prompt=prompt,
             agent=agent,
@@ -89,8 +95,13 @@ class OpenCodeRunner:
         )
         timeout = timeout_seconds or self.default_timeout_seconds
 
-        log.info("opencode.cli_invoked", command=cmd, cwd=self.config_path, timeout=timeout)
+        log.info(
+            "opencode.cli_invoked",
+            command=cmd, cwd=self.config_path, timeout=timeout,
+            extra_env_keys=list((extra_env or {}).keys()),
+        )
         start = time.monotonic()
+        env = {**os.environ, **(extra_env or {})}
 
         try:
             proc = await asyncio.create_subprocess_exec(
@@ -98,6 +109,7 @@ class OpenCodeRunner:
                 cwd=self.config_path,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                env=env,
                 limit=_STREAM_LIMIT_BYTES,
             )
             try:

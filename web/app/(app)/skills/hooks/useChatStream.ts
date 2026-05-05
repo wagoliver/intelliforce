@@ -42,13 +42,20 @@ export function useChatStream() {
   const abortRef = useRef<AbortController | null>(null);
 
   const send = useCallback(
-    async (prompt: string, agent?: string) => {
+    async (prompt: string, agent?: string, displayText?: string) => {
       const trimmed = prompt.trim();
       if (!trimmed || state.isStreaming) return;
 
       const userId = genId();
       const agentId = genId();
-      dispatch({ type: "USER_MESSAGE_SENT", id: userId, text: trimmed });
+      // displayText: o que aparece na bolha do user (ex: "/me").
+      // prompt: o que vai pro modelo via /chat/stream (ex: "Quem sou eu...").
+      // Quando ausente, ambos são iguais (caso comum: user digitou texto cru).
+      dispatch({
+        type: "USER_MESSAGE_SENT",
+        id: userId,
+        text: (displayText ?? trimmed).trim(),
+      });
 
       // Aborta stream anterior caso ainda esteja em flight (paranoia, isStreaming já protege)
       if (abortRef.current) abortRef.current.abort();

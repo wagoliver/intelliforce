@@ -81,9 +81,22 @@ export default function SkillsPage() {
         template = template.replaceAll(`{${key}}`, value);
       }
     }
-    setInput(template);
     setSlashIndex(0);
-    setTimeout(() => inputRef.current?.focus(), 0);
+
+    // Se template ainda tem placeholder não-preenchido (ex: /dept-create {name}),
+    // expande no input pro user editar antes de enviar.
+    const hasUnfilledPlaceholder = /\{[^}]+\}/.test(template);
+    if (hasUnfilledPlaceholder) {
+      setInput(template);
+      setTimeout(() => inputRef.current?.focus(), 0);
+      return;
+    }
+
+    // Template completo — envia direto. Bolha do user mostra cmd.label
+    // (ex: "/me"), backend recebe template expandido pra modelo entender.
+    if (state.isStreaming) return;
+    setInput("");
+    void send(template, agent, cmd.label);
   }
 
   // Aplica slash command vindo via query param (ex: dashboard linkando "criar dept")

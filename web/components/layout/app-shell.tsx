@@ -157,15 +157,24 @@ function FullscreenButton() {
   );
 }
 
+/** Mapeia pathname → título da página atual mostrado à esquerda do TopBar.
+   Centraliza pra evitar drift entre rota e label visível. */
+function pageTitleFor(pathname: string | null, t: (k: string) => string): string {
+  if (!pathname) return "";
+  if (pathname.startsWith("/dashboard")) return t("home");
+  if (pathname.startsWith("/skills")) return t("skills");
+  if (pathname.startsWith("/vault")) return t("vault");
+  return "";
+}
+
 function TopBar() {
-  const tc = useTranslations("common");
+  const tn = useTranslations("nav");
+  const pathname = usePathname();
+  const title = pageTitleFor(pathname, tn);
+
   return (
     <div className="topbar">
-      <div className="tb-search">
-        <SvgIcon className="ico" name="search" />
-        <span>{tc("search_placeholder")}</span>
-        <kbd>⌘ K</kbd>
-      </div>
+      <div className="tb-page-title">{title}</div>
       <div className="tb-actions">
         <FullscreenButton />
         <div className="tb-divider" />

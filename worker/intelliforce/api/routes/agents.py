@@ -61,10 +61,16 @@ async def create_agent(
 
 @router.get("", response_model=list[AgentOut])
 async def list_agents(
+    include_inactive: bool = False,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[AgentOut]:
-    result = await db.execute(select(Agent).order_by(Agent.created_at.desc()))
+    """Lista agents. Por default só retorna ativos — passe
+    `?include_inactive=true` pra ver todos (auditoria/admin)."""
+    stmt = select(Agent).order_by(Agent.created_at.desc())
+    if not include_inactive:
+        stmt = stmt.where(Agent.is_active.is_(True))
+    result = await db.execute(stmt)
     return [AgentOut.model_validate(a) for a in result.scalars().all()]
 
 
@@ -116,11 +122,25 @@ async def delete_agent(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> Response:
+    """Soft delete — marca o agent como inativo em vez de deletar fisicamente.
+
+    Tasks históricas mantêm `tasks.agent_id` apontando pra cá (preserva
+    trilha de auditoria/event sourcing). Hard delete falharia com FK
+    violation no FK constraint `fk_tasks_agent_id_agents`.
+
+    Idempotente: chamar várias vezes não causa erro.
+    """
     result = await db.execute(select(Agent).where(Agent.id == agent_id))
     agent = result.scalar_one_or_none()
     if not agent:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Agente não encontrado")
+        # Idempotente: já não existe = sucesso
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
+    if not agent.is_active:
+        # Já estava desativado — sucesso silencioso
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    agent.is_active = False
     bus = EventBus(db)
     await bus.emit(
         type="agent.deactivated",
@@ -129,6 +149,5 @@ async def delete_agent(
         payload={"name": agent.name, "reason": "deleted"},
         metadata={"actor": str(user.id)},
     )
-    await db.delete(agent)
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -88,11 +88,12 @@ async def _search_agents(
     stmt = (
         select(Agent)
         .where(
+            Agent.is_active.is_(True),
             or_(
                 Agent.display_name.ilike(pattern),
                 Agent.name.ilike(pattern),
                 Agent.description.ilike(pattern),
-            )
+            ),
         )
         .order_by(Agent.display_name)
         .limit(limit)

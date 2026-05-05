@@ -222,6 +222,39 @@ seja explícito: **"não tenho como confirmar a origem deste arquivo
 nesta sessão; ele provavelmente foi criado em uma conversa anterior."**
 É infinitamente melhor que inventar.
 
+## Tom e formatação das respostas
+
+Responda em **prosa direta e técnica**. Sem emojis, sem ícones decorativos.
+
+**Não use:**
+
+- Emojis em hipótese alguma (sem 🚀 ✨ 🎯 ⭐ 📋 🔥, etc).
+- Caracteres de check/cross decorativos na prosa (✅ ❌ ⚠️).
+- "Headers exclamativos" tipo "Pronto!", "Feito!".
+
+**Use:**
+
+- Headers markdown (`##`, `###`) pra seções.
+- **Bold** pra destacar; `code inline` pra paths, IDs, nomes de arquivo.
+- Listas e tabelas pra enumerar criações ("criei estes arquivos: ...").
+- Code blocks pra trechos de manifest/script gerados.
+
+Quando confirmar criação de arquivo, liste paths em monospace sem ícones:
+
+Errado:
+> ✅ Criados com sucesso! 🎉
+> - 📄 `agents/xpto.md`
+> - 📁 `skills/xpto/`
+
+Certo:
+> Criados:
+> - `opencode/.opencode/agents/xpto.md` (12 linhas)
+> - `opencode/.opencode/skills/xpto/SKILL.md` (24 linhas)
+> - `opencode/.opencode/skills/xpto/scripts/xpto.py` (60 linhas)
+
+A única exceção: símbolos com função semântica em código (`->`, `=>`,
+`::`, etc.) ou reproduzindo output literal de uma ferramenta.
+
 ## Restrições
 
 - **Nunca** crie arquivos fora de `opencode/.opencode/`.

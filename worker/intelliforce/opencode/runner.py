@@ -19,6 +19,7 @@ from typing import Any
 
 import structlog
 
+from intelliforce.opencode.lmstudio_loader import ensure_loaded, extract_lmstudio_key
 from intelliforce.settings import get_settings
 
 log = structlog.get_logger()
@@ -28,6 +29,33 @@ log = structlog.get_logger()
 # Read num arquivo longo, texto extenso de resposta do modelo). 10MB cobre
 # casos práticos sem comprometer memória.
 _STREAM_LIMIT_BYTES = 10 * 1024 * 1024
+
+# Substring literal da mensagem que o LM Studio devolve quando nenhum
+# modelo está carregado. O CLI OpenCode (via @ai-sdk/openai-compatible)
+# repassa isso pra stderr e/ou pra um evento NDJSON tipo "error"/"abort".
+_NO_MODELS_MARKER = "No models loaded"
+
+
+def _is_no_models_error(stderr: str, events: list[dict[str, Any]]) -> bool:
+    """Detecta o erro "No models loaded" do LM Studio em stderr ou eventos.
+
+    Match literal — sem regex em cascata. Eventos são consultados apenas
+    nos tipos {"error", "abort"} pra evitar matchear texto vindo do
+    próprio prompt/resposta do usuário.
+    """
+    if stderr and _NO_MODELS_MARKER in stderr:
+        return True
+    for event in events:
+        etype = event.get("type")
+        if etype not in ("error", "abort"):
+            continue
+        err_text = event.get("error") or ""
+        if isinstance(err_text, str) and _NO_MODELS_MARKER in err_text:
+            return True
+        part_text = (event.get("part") or {}).get("text") or ""
+        if isinstance(part_text, str) and _NO_MODELS_MARKER in part_text:
+            return True
+    return False
 
 
 @dataclass
@@ -50,6 +78,9 @@ class OpenCodeResult:
     cost_usd: float = 0.0
     error_message: str | None = None
     command: list[str] = field(default_factory=list)
+    # True se o runner detectou "No models loaded", carregou o modelo via
+    # SDK lmstudio e re-executou o subprocess. Apenas observabilidade.
+    retry_attempted: bool = False
 
 
 class OpenCodeRunner:
@@ -84,7 +115,67 @@ class OpenCodeRunner:
         `extra_env`: env vars adicionais propagadas pro subprocess. Usado
         pra injetar INTELLIFORCE_TOKEN do user logado (chat) ou da service
         account (worker scheduled tasks) sem mexer no env do worker host.
+
+        Lazy retry: se a 1ª execução falhar com "No models loaded" do LM
+        Studio e settings.lmstudio_auto_load=True, tenta carregar o modelo
+        via SDK lmstudio e re-executa uma única vez.
         """
+        result = await self._run_once(
+            prompt=prompt,
+            agent=agent,
+            model=model,
+            session_id=session_id,
+            continue_session=continue_session,
+            timeout_seconds=timeout_seconds,
+            extra_args=extra_args,
+            extra_env=extra_env,
+        )
+
+        if result.success:
+            return result
+        if not _is_no_models_error(result.raw_stderr, result.events):
+            return result
+        if not get_settings().lmstudio_auto_load:
+            return result
+
+        model_key = extract_lmstudio_key(model) or extract_lmstudio_key(
+            f"lmstudio/{get_settings().lmstudio_default_model}"
+        )
+        if not model_key:
+            return result
+
+        ok, info = await ensure_loaded(model_key)
+        if not ok:
+            original = result.error_message or f"Exit code {result.exit_code}"
+            result.error_message = f"{original} | LM Studio load failed: {info}"
+            return result
+
+        log.info("opencode.cli_retry_after_load", model_key=model_key, instance=info)
+        retried = await self._run_once(
+            prompt=prompt,
+            agent=agent,
+            model=model,
+            session_id=session_id,
+            continue_session=continue_session,
+            timeout_seconds=timeout_seconds,
+            extra_args=extra_args,
+            extra_env=extra_env,
+        )
+        retried.retry_attempted = True
+        return retried
+
+    async def _run_once(
+        self,
+        prompt: str,
+        agent: str | None,
+        model: str | None,
+        session_id: str | None,
+        continue_session: bool,
+        timeout_seconds: int | None,
+        extra_args: list[str] | None,
+        extra_env: dict[str, str] | None,
+    ) -> OpenCodeResult:
+        """Uma única invocação do subprocess. Caller orquestra retry."""
         cmd = self._build_command(
             prompt=prompt,
             agent=agent,
@@ -186,11 +277,132 @@ class OpenCodeRunner:
         extra_args: list[str] | None = None,
         extra_env: dict[str, str] | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        """Executa OpenCode e yielda cada linha NDJSON do stdout em tempo real.
+        """Executa OpenCode com retry lazy se a 1ª tentativa falhar com
+        "No models loaded" antes de emitir conteúdo substancial.
 
-        Diferente de run(), não acumula nem retorna OpenCodeResult — quem consume
-        é responsável por agregar o que precisar. Eventos sintéticos extras emitidos:
+        Bufferiza os primeiros eventos até o primeiro de:
+          - {"type": "text"} com texto não-vazio
+          - {"type": "step_start" | "step_finish" | "tool_call" | "tool_result"}
+          - {"type": "stream_end" | "stream_error"}
 
+        Se o stream terminar antes de qualquer evento substancial e a causa
+        for "No models loaded", carrega o modelo via SDK lmstudio, emite
+        {"type": "stream_info", ...} e re-executa uma única vez, marcando
+        retry_attempted=True no stream_end final.
+
+        Caso contrário, repassa o buffer e continua normalmente — sem retry
+        depois de já ter emitido conteúdo (consumer não pode "voltar").
+        """
+        first_run_buffer: list[dict[str, Any]] = []
+        saw_substantive = False
+        final_event: dict[str, Any] | None = None
+
+        async for event in self._run_stream_once(
+            prompt=prompt,
+            agent=agent,
+            model=model,
+            session_id=session_id,
+            continue_session=continue_session,
+            timeout_seconds=timeout_seconds,
+            extra_args=extra_args,
+            extra_env=extra_env,
+        ):
+            etype = event.get("type")
+
+            if saw_substantive:
+                yield event
+                continue
+
+            if etype == "text":
+                part_text = (event.get("part") or {}).get("text") or ""
+                if part_text.strip():
+                    saw_substantive = True
+            elif etype in ("step_start", "step_finish", "tool_call", "tool_result"):
+                saw_substantive = True
+
+            if etype in ("stream_end", "stream_error"):
+                final_event = event
+                break
+
+            if saw_substantive:
+                for ev in first_run_buffer:
+                    yield ev
+                first_run_buffer.clear()
+                yield event
+            else:
+                first_run_buffer.append(event)
+
+        if final_event is None:
+            return
+
+        stderr_text = final_event.get("stderr", "") if final_event.get("type") == "stream_end" else ""
+        error_text = final_event.get("error", "") or ""
+        combined_stderr = f"{stderr_text}\n{error_text}".strip()
+
+        if not _is_no_models_error(combined_stderr, first_run_buffer):
+            for ev in first_run_buffer:
+                yield ev
+            yield final_event
+            return
+
+        if not get_settings().lmstudio_auto_load:
+            for ev in first_run_buffer:
+                yield ev
+            yield final_event
+            return
+
+        model_key = extract_lmstudio_key(model) or extract_lmstudio_key(
+            f"lmstudio/{get_settings().lmstudio_default_model}"
+        )
+        if not model_key:
+            for ev in first_run_buffer:
+                yield ev
+            yield final_event
+            return
+
+        ok, info = await ensure_loaded(model_key)
+        if not ok:
+            log.warning("opencode.cli_stream_load_failed", model_key=model_key, info=info)
+            for ev in first_run_buffer:
+                yield ev
+            yield final_event
+            return
+
+        yield {
+            "type": "stream_info",
+            "message": "Carregando modelo no LM Studio…",
+            "instance": info,
+        }
+        log.info("opencode.cli_stream_retry_after_load", model_key=model_key, instance=info)
+
+        async for event in self._run_stream_once(
+            prompt=prompt,
+            agent=agent,
+            model=model,
+            session_id=session_id,
+            continue_session=continue_session,
+            timeout_seconds=timeout_seconds,
+            extra_args=extra_args,
+            extra_env=extra_env,
+        ):
+            if event.get("type") == "stream_end":
+                event = {**event, "retry_attempted": True}
+            yield event
+
+    async def _run_stream_once(
+        self,
+        prompt: str,
+        agent: str | None = None,
+        model: str | None = None,
+        session_id: str | None = None,
+        continue_session: bool = False,
+        timeout_seconds: int | None = None,
+        extra_args: list[str] | None = None,
+        extra_env: dict[str, str] | None = None,
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Uma única invocação streaming do CLI. Caller orquestra retry.
+
+        Eventos sintéticos emitidos:
           - {"type": "stream_start", "command": [...]}                      (antes do primeiro evento)
           - {"type": "stream_end", "exit_code": int, "duration_ms": int,    (depois do último)
              "stderr": str}

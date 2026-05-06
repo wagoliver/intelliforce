@@ -28,6 +28,7 @@ from intelliforce.api.schemas.organization import (
     DepartmentCreate,
     DepartmentOut,
     DepartmentUpdate,
+    PersonOut,
     SquadCreate,
     SquadOut,
     SquadUpdate,
@@ -66,6 +67,22 @@ async def _instance_counts_per_activity(db: AsyncSession) -> dict[uuid.UUID, dic
     return counts
 
 
+async def _resolve_owner(db: AsyncSession, owner_user_id: uuid.UUID | None) -> PersonOut | None:
+    """Busca o User do gestor para serializar o nome/email/role no DepartmentOut.
+
+    Retorna None se owner_user_id é nulo, ou se o user foi removido — a FK é
+    ON DELETE SET NULL, então o id pode persistir após exclusão; serializar
+    como None aqui mantém o caller seguro.
+    """
+    if owner_user_id is None:
+        return None
+    res = await db.execute(select(User).where(User.id == owner_user_id))
+    user = res.scalar_one_or_none()
+    if user is None:
+        return None
+    return PersonOut(id=user.id, name=user.name, email=user.email, role=user.role)
+
+
 async def _serialize_department(db: AsyncSession, dept: Department) -> DepartmentOut:
     """Serializa Department com squads, activities e contagens reais de AgentInstance."""
     counts = await _instance_counts_per_activity(db)
@@ -101,9 +118,10 @@ async def _serialize_department(db: AsyncSession, dept: Department) -> Departmen
             activities=activities_out, created_at=squad.created_at, updated_at=squad.updated_at,
         ))
 
+    owner = await _resolve_owner(db, dept.owner_user_id)
     return DepartmentOut(
         id=dept.id, name=dept.name, display_name=dept.display_name,
-        objective=dept.objective, owner_user_id=dept.owner_user_id,
+        objective=dept.objective, owner_user_id=dept.owner_user_id, owner=owner,
         monthly_cost_budget_usd=dept.monthly_cost_budget_usd, health=dept.health,
         squads=squads_out, total_agents=total_agents,
         next_run=min(next_runs) if next_runs else None,

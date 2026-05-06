@@ -32,12 +32,20 @@ export interface SquadOut {
   updated_at: string;
 }
 
+export interface PersonOut {
+  id: UUID;
+  name: string;
+  email: string;
+  role: string;
+}
+
 export interface DepartmentOut {
   id: UUID;
   name: string;
   display_name: string;
   objective: string;
   owner_user_id: UUID | null;
+  owner: PersonOut | null;
   monthly_cost_budget_usd: string;
   health: string;
   squads: SquadOut[];
@@ -45,13 +53,6 @@ export interface DepartmentOut {
   next_run: string | null;
   created_at: string;
   updated_at: string;
-}
-
-export interface PersonOut {
-  id: UUID;
-  name: string;
-  email: string;
-  role: string;
 }
 
 export const departments = {

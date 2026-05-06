@@ -46,6 +46,11 @@ cryptography==43.0.3   # Fernet pra Vault — encrypt/decrypt de secrets
 # --- LLM provider (abstração OpenAI-compatible) ---
 openai==1.51.0  # cliente OpenAI-compatible serve pra LM Studio
 
+# SDK Python do LM Studio (WebSocket na porta 1234) — usado só pelo
+# lazy retry quando o CLI OpenCode recebe "No models loaded". Não usado
+# em hot path. Ver intelliforce/opencode/lmstudio_loader.py.
+lmstudio==1.5.0
+
 # --- Observability (preparado pra futuro) ---
 # langfuse==2.50.0
 # opentelemetry-api==1.27.0

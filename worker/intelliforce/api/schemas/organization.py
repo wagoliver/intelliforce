@@ -112,23 +112,6 @@ class DepartmentUpdate(BaseModel):
     health: str | None = None
 
 
-class DepartmentOut(BaseModel):
-    id: uuid.UUID
-    name: str
-    display_name: str
-    objective: str
-    owner_user_id: uuid.UUID | None
-    monthly_cost_budget_usd: Decimal
-    health: str
-    squads: list[SquadOut] = []
-    total_agents: int = 0
-    next_run: datetime | None = None  # próxima execução agregada (mínima entre activities)
-    created_at: datetime
-    updated_at: datetime
-
-    model_config = {"from_attributes": True}
-
-
 # -----------------------------------------------------------------------------
 # People (subset de users pra Department setup)
 # -----------------------------------------------------------------------------
@@ -137,5 +120,26 @@ class PersonOut(BaseModel):
     name: str
     email: str
     role: str
+
+    model_config = {"from_attributes": True}
+
+
+class DepartmentOut(BaseModel):
+    id: uuid.UUID
+    name: str
+    display_name: str
+    objective: str
+    owner_user_id: uuid.UUID | None
+    # Owner resolvido via JOIN — None quando owner_user_id é nulo ou o user
+    # foi removido (FK ON DELETE SET NULL). Caller (frontend) usa esse campo
+    # pra exibir nome/role; campo legado owner_user_id permanece para escrita.
+    owner: PersonOut | None = None
+    monthly_cost_budget_usd: Decimal
+    health: str
+    squads: list[SquadOut] = []
+    total_agents: int = 0
+    next_run: datetime | None = None  # próxima execução agregada (mínima entre activities)
+    created_at: datetime
+    updated_at: datetime
 
     model_config = {"from_attributes": True}

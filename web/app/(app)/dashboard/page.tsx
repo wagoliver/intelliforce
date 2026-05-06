@@ -36,7 +36,9 @@ function toOrgShape(dept: DepartmentOut, m?: DepartmentMetricsOut | null): any {
     id: dept.id,
     slug: dept.name,
     name: dept.display_name,
-    owner: { name: "—", role: "" },
+    owner: dept.owner
+      ? { name: dept.owner.name, role: dept.owner.role }
+      : { name: "—", role: "" },
     objective: dept.objective || "",
     cost: {
       monthly: m ? Number(m.monthly_cost_usd) : Number(dept.monthly_cost_budget_usd) || 0,

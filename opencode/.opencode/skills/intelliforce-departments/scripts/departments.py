@@ -81,6 +81,8 @@ def cmd_create(args: argparse.Namespace) -> int:
         payload["monthly_cost_budget_usd"] = args.budget
     if args.health:
         payload["health"] = args.health
+    if args.owner_user_id is not None:
+        payload["owner_user_id"] = args.owner_user_id
 
     try:
         resp = httpx.post(f"{base}/departments", headers=headers, json=payload, timeout=20.0)
@@ -102,6 +104,9 @@ def cmd_update(args: argparse.Namespace) -> int:
         payload["monthly_cost_budget_usd"] = args.budget
     if args.health:
         payload["health"] = args.health
+    if args.owner_user_id is not None:
+        # String vazia desfaz a associação (envia null no payload).
+        payload["owner_user_id"] = args.owner_user_id or None
     if not payload:
         print("USAGE_ERROR: passe ao menos um campo pra atualizar", file=sys.stderr)
         return 2
@@ -141,6 +146,7 @@ def main() -> int:
     p_create.add_argument("--objective")
     p_create.add_argument("--budget", help="Decimal monthly_cost_budget_usd")
     p_create.add_argument("--health", choices=["healthy", "attention"])
+    p_create.add_argument("--owner-user-id", help="UUID do gestor (resolva via GET /people)")
 
     p_update = sub.add_parser("update")
     p_update.add_argument("id")
@@ -148,6 +154,7 @@ def main() -> int:
     p_update.add_argument("--objective")
     p_update.add_argument("--budget")
     p_update.add_argument("--health", choices=["healthy", "attention"])
+    p_update.add_argument("--owner-user-id", help="UUID do gestor; passe string vazia para desassociar")
 
     p_delete = sub.add_parser("delete")
     p_delete.add_argument("id")

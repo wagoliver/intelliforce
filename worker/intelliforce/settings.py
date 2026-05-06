@@ -62,6 +62,10 @@ class Settings(BaseSettings):
     lmstudio_default_model: str = Field(default="qwen/qwen3.6-27b")
     lmstudio_max_tokens: int = Field(default=8192)
     lmstudio_context_length: int = Field(default=32768)
+    # Kill-switch do lazy retry: se o CLI OpenCode receber "No models loaded",
+    # o runner tenta carregar o modelo via SDK lmstudio e re-executa uma vez.
+    # Setar False quando o LM Link estiver caído e retentar só atrasar o erro.
+    lmstudio_auto_load: bool = Field(default=True)
 
     # --- OpenCode ---
     opencode_config_path: str = Field(default="/opencode-runtime")

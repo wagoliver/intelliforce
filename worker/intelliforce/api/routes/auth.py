@@ -31,8 +31,11 @@ async def register(payload: UserRegisterRequest, db: AsyncSession = Depends(get_
     if existing.scalar_one_or_none():
         raise HTTPException(status.HTTP_409_CONFLICT, detail="E-mail já cadastrado")
 
-    # Primeiro user vira admin
-    count_result = await db.execute(select(User.id).limit(1))
+    # Primeiro user humano vira admin. Service accounts (worker-internal etc.)
+    # são ignorados — senão o bootstrap do worker rouba o slot de admin.
+    count_result = await db.execute(
+        select(User.id).where(User.is_service.is_(False)).limit(1)
+    )
     has_users = count_result.scalar_one_or_none() is not None
     role = UserRole.USER.value if has_users else UserRole.ADMIN.value
 

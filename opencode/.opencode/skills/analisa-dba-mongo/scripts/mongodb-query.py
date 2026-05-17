@@ -4,8 +4,17 @@ import sys
 import argparse
 from datetime import datetime, timezone, timedelta
 from pymongo import MongoClient
+from bson import ObjectId
 
 VAULT = "/opencode-runtime/.opencode/skills/intelliforce-vault/scripts/vault.py"
+
+class MongoEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, ObjectId):
+            return str(obj)
+        if isinstance(obj, datetime):
+            return obj.strftime("%Y-%m-%d %H:%M:%S")
+        return super().default(obj)
 
 def get_conn_str():
     result = subprocess.run(
@@ -64,7 +73,7 @@ def main():
             if "created_at" in doc:
                 doc["created_at"] = to_gmt3(doc["created_at"])
             results.append(doc)
-        print(json.dumps(results, indent=2, ensure_ascii=False))
+        print(json.dumps(results, indent=2, ensure_ascii=False, cls=MongoEncoder))
     except Exception as e:
         print(f"Query error: {e}", file=sys.stderr)
         sys.exit(1)

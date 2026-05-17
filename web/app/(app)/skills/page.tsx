@@ -5,12 +5,14 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { AskForm, type AskQuestion } from "./components/AskForm";
+import { ChatHistorySidebar } from "./components/ChatHistorySidebar";
 import { EmptyState, PromptSuggestions } from "./components/EmptyState";
 import { NeuralRibbons } from "./components/NeuralRibbons";
 import { FileTree } from "./components/FileTree";
 import { MarkdownView } from "./components/MarkdownView";
 import { SkillDrawer } from "./components/SkillDrawer";
 import { SlashPalette } from "./components/SlashPalette";
+import { useChatSessions, type ChatSessionItem } from "./hooks/useChatSessions";
 import { useChatStream } from "./hooks/useChatStream";
 import { useOpenCodeTree, type OpenCodeFile, type OpenCodeTree } from "./hooks/useOpenCodeTree";
 import { useReducedMotion } from "./hooks/useReducedMotion";
@@ -30,15 +32,59 @@ const AGENT_OPTIONS: { key: AgentKey; label: string; tagline: string }[] = [
 ];
 
 const AGENT_STORAGE_KEY = "skills.agent";
+const HISTORY_COLLAPSED_KEY = "skills.historyCollapsed";
 
 export default function SkillsPage() {
-  const { state, send, abort } = useChatStream();
+  const { state, send, abort, hydrateFromHistory, reset } = useChatStream();
   const { tree, loading: treeLoading, error: treeError, refetch } = useOpenCodeTree();
+  const {
+    sessions,
+    loading: sessionsLoading,
+    refetch: refetchSessions,
+    loadMessages,
+    archive: archiveSession,
+  } = useChatSessions();
   const [input, setInput] = useState("");
   const [selected, setSelected] = useState<{ kind: OpenCodeFile["kind"] | "script"; slug: string } | null>(null);
   const [collapsed, setCollapsed] = useState(false);
+  const [historyCollapsed, setHistoryCollapsed] = useState(false);
   const [recentlyCreated, setRecentlyCreated] = useState<Set<string>>(new Set());
   const [agent, setAgent] = useState<AgentKey>("operator");
+
+  // Hidrata estado de colapso da sidebar de histórico do localStorage
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = window.localStorage.getItem(HISTORY_COLLAPSED_KEY);
+    if (stored === "1") setHistoryCollapsed(true);
+  }, []);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(HISTORY_COLLAPSED_KEY, historyCollapsed ? "1" : "0");
+  }, [historyCollapsed]);
+
+  // Handlers de sessão (sidebar)
+  async function handleOpenSession(s: ChatSessionItem) {
+    if (state.isStreaming) return;
+    try {
+      const history = await loadMessages(s.id);
+      hydrateFromHistory(s.opencode_session_id, history);
+    } catch {
+      // Falha silenciosa por enquanto — se carregar deu errado, mantém estado.
+    }
+  }
+  function handleNewConversation() {
+    if (state.isStreaming) return;
+    reset();
+    setInput("");
+    setTimeout(() => inputRef.current?.focus(), 0);
+  }
+  async function handleArchiveSession(s: ChatSessionItem) {
+    const ok = await archiveSession(s.id);
+    if (ok && s.opencode_session_id === state.sessionId) {
+      // Apagamos a conversa ativa — reseta pra evitar continuar em sessão arquivada
+      reset();
+    }
+  }
 
   // Hidrata seleção de agente do localStorage
   useEffect(() => {
@@ -146,17 +192,20 @@ export default function SkillsPage() {
     el.style.height = `${el.scrollHeight}px`;
   }, [input]);
 
-  // Refetch tree quando stream termina
+  // Refetch tree + lista de conversas quando stream termina
   useEffect(() => {
     if (wasStreamingRef.current && !state.isStreaming) {
       if (refetchTimerRef.current) clearTimeout(refetchTimerRef.current);
-      refetchTimerRef.current = setTimeout(() => void refetch(), 300);
+      refetchTimerRef.current = setTimeout(() => {
+        void refetch();
+        void refetchSessions();
+      }, 300);
     }
     wasStreamingRef.current = state.isStreaming;
     return () => {
       if (refetchTimerRef.current) clearTimeout(refetchTimerRef.current);
     };
-  }, [state.isStreaming, refetch]);
+  }, [state.isStreaming, refetch, refetchSessions]);
 
   // Detecta arquivos novos pra animar glow na tree
   useEffect(() => {
@@ -220,6 +269,16 @@ export default function SkillsPage() {
   return (
     <>
       <div className="skills-content">
+        <ChatHistorySidebar
+          sessions={sessions}
+          loading={sessionsLoading}
+          activeOpencodeSessionId={state.sessionId}
+          collapsed={historyCollapsed}
+          onToggleCollapsed={() => setHistoryCollapsed((c) => !c)}
+          onNewConversation={handleNewConversation}
+          onOpenSession={handleOpenSession}
+          onArchive={handleArchiveSession}
+        />
         <FileTree
           tree={tree}
           loading={treeLoading}

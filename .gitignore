@@ -187,3 +187,4 @@ embeddings/
 tmp/
 temp/
 .cache/
+.docker-config/

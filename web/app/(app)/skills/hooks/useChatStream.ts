@@ -3,7 +3,16 @@
 import { useCallback, useReducer, useRef } from "react";
 
 import { chatReducer, initialChatState } from "../state/chatReducer";
-import type { ChatAction } from "../state/types";
+import type { ChatAction, ChatMessage } from "../state/types";
+
+/** Mensagem como vem do GET /chat/sessions/{id}/messages */
+export type HistoryMessage = {
+  id: string;
+  role: "user" | "agent";
+  content: string;
+  sequence_num: number;
+  created_at: string;
+};
 
 /**
  * Gera um ID único pra mensagens/tool calls da UI.
@@ -164,7 +173,57 @@ export function useChatStream() {
     dispatch({ type: "AGENT_TURN_FINISHED" });
   }, []);
 
-  return { state, send, abort };
+  /**
+   * Carrega transcrição de uma conversa antiga vinda do DB e cola no state.
+   * Converte cada HistoryMessage no shape esperado pelo reducer:
+   *   - user → { role: 'user', text }
+   *   - agent → ChatMessage finalizada, sem tool calls/thinking (que ficaram
+   *     só no OpenCode). Cronômetro congelado em created_at.
+   * O sessionId é setado pra que o próximo `send()` continue a sessão no
+   * OpenCode via --session.
+   */
+  const hydrateFromHistory = useCallback(
+    (opencodeSessionId: string, history: HistoryMessage[]) => {
+      // Aborta qualquer stream em flight antes de trocar de conversa
+      if (abortRef.current) {
+        abortRef.current.abort();
+        abortRef.current = null;
+      }
+      const messages: ChatMessage[] = history.map((m) => {
+        if (m.role === "user") {
+          return { id: m.id, role: "user", text: m.content };
+        }
+        const ts = Date.parse(m.created_at) || Date.now();
+        return {
+          id: m.id,
+          role: "agent",
+          text: m.content,
+          toolCalls: [],
+          thinkingLines: [],
+          isStreaming: false,
+          startedAt: ts,
+          finishedAt: ts,
+        };
+      });
+      dispatch({
+        type: "HYDRATE_FROM_HISTORY",
+        messages,
+        sessionId: opencodeSessionId,
+      });
+    },
+    [],
+  );
+
+  /** "+ Nova conversa" — limpa estado pra começar do zero. */
+  const reset = useCallback(() => {
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
+    }
+    dispatch({ type: "RESET_CHAT" });
+  }, []);
+
+  return { state, send, abort, hydrateFromHistory, reset };
 }
 
 /**

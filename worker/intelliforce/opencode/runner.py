@@ -195,21 +195,45 @@ class OpenCodeRunner:
         env = {**os.environ, **(extra_env or {})}
 
         try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                cwd=self.config_path,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env=env,
-                limit=_STREAM_LIMIT_BYTES,
-            )
+            # Workaround: asyncio.create_subprocess_exec dentro do request
+            # handler do uvicorn fica com stdout vazio (subprocess sai exit 0
+            # sem produzir output). Mesma chamada via asyncio.run standalone
+            # funciona. Rodar via subprocess.run em thread pool contorna o
+            # problema sem mudar a semântica blocking de _run_once.
+            import subprocess as _sp
+            loop = asyncio.get_running_loop()
             try:
-                stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                    proc.communicate(), timeout=timeout
-                )
-            except TimeoutError:
-                proc.kill()
-                await proc.wait()
+                import shlex as _shlex, tempfile as _tmp, os as _os
+                _outdir = _tmp.mkdtemp(prefix="opencode-")
+                _out_path = f"{_outdir}/stdout"
+                _err_path = f"{_outdir}/stderr"
+                _cmd_str = " ".join(_shlex.quote(c) for c in cmd)
+                _env_exports = " ".join(f"{k}={_shlex.quote(v)}" for k, v in (extra_env or {}).items())
+                _shell_cmd = f"cd {_shlex.quote(self.config_path)} && {_env_exports} {_cmd_str} >{_shlex.quote(_out_path)} 2>{_shlex.quote(_err_path)}"
+                exit_code_shell = await loop.run_in_executor(None, lambda: _os.system(_shell_cmd))
+                exit_code = (exit_code_shell >> 8) & 0xFF
+                try:
+                    with open(_out_path, "rb") as _f:
+                        _stdout_bytes = _f.read()
+                    with open(_err_path, "rb") as _f:
+                        _stderr_bytes = _f.read()
+                except Exception:
+                    _stdout_bytes, _stderr_bytes = b"", b""
+                finally:
+                    try:
+                        import shutil as _shutil
+                        _shutil.rmtree(_outdir, ignore_errors=True)
+                    except Exception:
+                        pass
+
+                class _Completed:
+                    def __init__(self, ec, so, se):
+                        self.returncode = ec
+                        self.stdout = so
+                        self.stderr = se
+
+                completed = _Completed(exit_code, _stdout_bytes, _stderr_bytes)
+            except _sp.TimeoutExpired:
                 duration_ms = int((time.monotonic() - start) * 1000)
                 log.error("opencode.cli_timeout", duration_ms=duration_ms, timeout=timeout)
                 return OpenCodeResult(
@@ -221,9 +245,9 @@ class OpenCodeRunner:
                 )
 
             duration_ms = int((time.monotonic() - start) * 1000)
-            stdout = stdout_bytes.decode("utf-8", errors="replace")
-            stderr = stderr_bytes.decode("utf-8", errors="replace")
-            exit_code = proc.returncode or 0
+            stdout = completed.stdout.decode("utf-8", errors="replace")
+            stderr = completed.stderr.decode("utf-8", errors="replace")
+            exit_code = completed.returncode or 0
 
             result = self._parse_result(
                 stdout=stdout,
@@ -242,6 +266,10 @@ class OpenCodeRunner:
                 tokens_output=result.tokens_output,
                 cost_usd=result.cost_usd,
                 events=len(result.events),
+                raw_stdout_len=len(result.raw_stdout),
+                raw_stderr_len=len(result.raw_stderr),
+                raw_stderr_preview=result.raw_stderr[:500],
+                raw_stdout_preview=result.raw_stdout[:500],
             )
             return result
 
@@ -434,68 +462,134 @@ class OpenCodeRunner:
         )
         start = time.monotonic()
 
-        proc: asyncio.subprocess.Process | None = None
+        # Workaround: PIPE do asyncio.create_subprocess_exec — e Popen com
+        # stdout=open_fd — ficam vazios quando spawnados de dentro do uvicorn
+        # worker. A única forma que funciona é deixar o SHELL fazer o redirect
+        # (`> arquivo`) pós-fork, igual `os.system`. Aqui usamos Popen com
+        # shell=True e redirect na string; o async loop fica fazendo tail
+        # incremental do arquivo enquanto subprocess roda.
+        import shlex as _shlex
+        import subprocess as _sp
+        import tempfile as _tmp
+        import shutil as _shutil
+
+        log_raw = os.environ.get("OPENCODE_LOG_RAW_EVENTS", "").lower() in ("1", "true", "yes")
+
+        outdir = _tmp.mkdtemp(prefix="opencode-stream-")
+        out_path = f"{outdir}/stdout"
+        err_path = f"{outdir}/stderr"
+        # Toca os arquivos pra evitar FileNotFoundError no tail antes do shell rodar
+        open(out_path, "wb").close()
+        open(err_path, "wb").close()
+        _cmd_str = " ".join(_shlex.quote(c) for c in cmd)
+        _shell_cmd = (
+            f"cd {_shlex.quote(self.config_path)} && "
+            f"{_cmd_str} > {_shlex.quote(out_path)} 2> {_shlex.quote(err_path)}"
+        )
+        proc: _sp.Popen[bytes] | None = None
         try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                cwd=self.config_path,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+            proc = _sp.Popen(
+                _shell_cmd,
+                shell=True,
+                stdin=_sp.DEVNULL,
+                stdout=_sp.DEVNULL,
+                stderr=_sp.DEVNULL,
                 env=env,
-                limit=_STREAM_LIMIT_BYTES,
+                start_new_session=True,
             )
 
             yield {"type": "stream_start", "command": cmd}
 
-            assert proc.stdout is not None  # subprocess garante PIPE → não-nulo
             timed_out = False
+            deadline = time.monotonic() + timeout
+            pos = 0
+            partial = b""
 
-            # Modo debug: setar OPENCODE_LOG_RAW_EVENTS=1 no .env loga cada
-            # evento NDJSON do CLI (truncado). Útil pra mapear shapes de tool
-            # calls que ainda caem no fallback genérico no frontend.
-            log_raw = os.environ.get("OPENCODE_LOG_RAW_EVENTS", "").lower() in ("1", "true", "yes")
+            with open(out_path, "rb") as reader:
+                while True:
+                    reader.seek(pos)
+                    chunk = reader.read()
+                    if chunk:
+                        pos += len(chunk)
+                        data = partial + chunk
+                        # Last byte sem newline = linha incompleta — guarda
+                        if data.endswith(b"\n"):
+                            lines = data.split(b"\n")
+                            partial = b""
+                        else:
+                            lines = data.split(b"\n")
+                            partial = lines[-1]
+                            lines = lines[:-1]
+                        for raw in lines:
+                            line = raw.decode("utf-8", errors="replace").strip()
+                            if not line:
+                                continue
+                            try:
+                                event = json.loads(line)
+                            except json.JSONDecodeError:
+                                log.warning("opencode.cli_stream_bad_json", line=line[:200])
+                                continue
+                            if log_raw:
+                                log.info(
+                                    "opencode.cli_event",
+                                    type=event.get("type"),
+                                    preview=json.dumps(event, ensure_ascii=False)[:500],
+                                )
+                            yield event
 
-            async def read_lines() -> AsyncIterator[dict[str, Any]]:
-                assert proc is not None and proc.stdout is not None
-                async for raw in proc.stdout:
-                    line = raw.decode("utf-8", errors="replace").strip()
-                    if not line:
-                        continue
-                    try:
-                        event = json.loads(line)
-                    except json.JSONDecodeError:
-                        log.warning("opencode.cli_stream_bad_json", line=line[:200])
-                        continue
-                    if log_raw:
-                        # Trunca pra evitar payload gigante (ex.: write com
-                        # content de 500kb)
-                        log.info(
-                            "opencode.cli_event",
-                            type=event.get("type"),
-                            preview=json.dumps(event, ensure_ascii=False)[:500],
-                        )
-                    yield event
+                    rc = proc.poll()
+                    if rc is not None:
+                        # Subprocess terminou — flush qualquer sobra residual
+                        reader.seek(pos)
+                        tail = reader.read()
+                        if tail or partial:
+                            final_data = partial + tail
+                            for raw in final_data.split(b"\n"):
+                                line = raw.decode("utf-8", errors="replace").strip()
+                                if not line:
+                                    continue
+                                try:
+                                    event = json.loads(line)
+                                except json.JSONDecodeError:
+                                    log.warning("opencode.cli_stream_bad_json", line=line[:200])
+                                    continue
+                                if log_raw:
+                                    log.info(
+                                        "opencode.cli_event",
+                                        type=event.get("type"),
+                                        preview=json.dumps(event, ensure_ascii=False)[:500],
+                                    )
+                                yield event
+                            partial = b""
+                        break
 
-            try:
-                async with asyncio.timeout(timeout):
-                    async for event in read_lines():
-                        yield event
-            except TimeoutError:
-                timed_out = True
-                log.error("opencode.cli_stream_timeout", timeout=timeout)
-                if proc.returncode is None:
-                    proc.kill()
+                    if time.monotonic() > deadline:
+                        timed_out = True
+                        log.error("opencode.cli_stream_timeout", timeout=timeout)
+                        try:
+                            proc.kill()
+                        except Exception:
+                            pass
+                        break
 
-            await proc.wait()
-            duration_ms = int((time.monotonic() - start) * 1000)
+                    await asyncio.sleep(0.05)
 
-            stderr_bytes = b""
-            if proc.stderr is not None:
+            # Espera subprocess fechar mesmo (poll já confirmou ou kill foi mandado)
+            if proc.poll() is None:
                 try:
-                    stderr_bytes = await proc.stderr.read()
+                    await asyncio.to_thread(proc.wait, 5)
                 except Exception:
-                    pass
-            stderr_text = stderr_bytes.decode("utf-8", errors="replace")
+                    try:
+                        proc.kill()
+                    except Exception:
+                        pass
+
+            duration_ms = int((time.monotonic() - start) * 1000)
+            try:
+                with open(err_path, "rb") as f:
+                    stderr_text = f.read().decode("utf-8", errors="replace")
+            except Exception:
+                stderr_text = ""
 
             exit_code = proc.returncode if proc.returncode is not None else -1
             if timed_out:
@@ -540,12 +634,16 @@ class OpenCodeRunner:
             # o cliente HTTP fecha conexão SSE, FastAPI cancela o producer task
             # no chat.py, que fecha esse async gen via aclose(), disparando
             # este finally e evitando subprocess zumbi.
-            if proc is not None and proc.returncode is None:
+            if proc is not None and proc.poll() is None:
                 try:
                     proc.kill()
-                    await proc.wait()
+                    await asyncio.to_thread(proc.wait, 2)
                 except Exception:  # noqa: BLE001
                     pass
+            try:
+                _shutil.rmtree(outdir, ignore_errors=True)
+            except Exception:  # noqa: BLE001
+                pass
 
     def _build_command(
         self,

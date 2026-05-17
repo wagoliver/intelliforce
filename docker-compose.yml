@@ -194,6 +194,39 @@ services:
     networks:
       - intelliforce-net
 
+  # ---------------------------------------------------------------------------
+  # Smoke test (roda automaticamente a cada `docker compose up`)
+  # ---------------------------------------------------------------------------
+  # Valida cada peça (Redis, ClickHouse, API, auth chain, OpenCode CLI,
+  # LM Studio /models, LLM round-trip) sem rodar agente. Sai com código 0 se
+  # tudo passou, 1 se algo falhou. Logs visíveis via:
+  #   docker compose logs smoke-test
+  # ---------------------------------------------------------------------------
+  smoke-test:
+    image: intelliforce-worker:latest               # mesma imagem do worker (tem opencode, curl, python)
+    container_name: intelliforce-smoke-test
+    restart: "no"
+    env_file:
+      - .env
+    environment:
+      API_BASE: http://api:8000
+      LMSTUDIO_URL: http://host.docker.internal:1234
+      OPENCODE_DIR: /workspace/opencode
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - ./opencode:/workspace/opencode:ro
+      - ./infrastructure/smoke-test.sh:/usr/local/bin/smoke-test.sh:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      api:
+        condition: service_healthy
+      worker:
+        condition: service_healthy
+    networks:
+      - intelliforce-net
+    entrypoint: ["/bin/bash", "/usr/local/bin/smoke-test.sh"]
+
 # =============================================================================
 # Volumes persistentes
 # =============================================================================

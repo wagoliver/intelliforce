@@ -54,4 +54,8 @@ export type ChatAction =
   | { type: "THINKING_LINE"; id: string; kind: string; label: string; fullText?: string }
   | { type: "SESSION_ID"; sessionId: string }
   | { type: "AGENT_TURN_FINISHED" }
-  | { type: "ERROR"; error: string };
+  | { type: "ERROR"; error: string }
+  // Carrega transcrição salva no DB ao abrir conversa antiga da sidebar.
+  | { type: "HYDRATE_FROM_HISTORY"; messages: ChatMessage[]; sessionId: string }
+  // "+ Nova conversa" — limpa estado pra começar do zero.
+  | { type: "RESET_CHAT" };

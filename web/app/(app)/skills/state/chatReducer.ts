@@ -200,6 +200,17 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         messages,
       };
     }
+    case "HYDRATE_FROM_HISTORY": {
+      return {
+        messages: action.messages,
+        sessionId: action.sessionId,
+        isStreaming: false,
+        error: null,
+      };
+    }
+    case "RESET_CHAT": {
+      return initialChatState;
+    }
     default:
       return state;
   }

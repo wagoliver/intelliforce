@@ -45,3 +45,17 @@ Array JSON com objetos contendo:
 - Token é renovado em memória a cada execução. Nada persistido em disco.
 - Filtra apenas tickets com `statusType != "Closed"` e `cf_nivel_de_suporte` em ("N1", "N2").
 - Ordena por `ticketNumber` decrescente (mais recentes primeiro).
+
+## Histórico de Tickets
+
+A mesma pasta contém um script para consultar o histórico completo de um ticket específico:
+
+```bash
+# Pelo número visível (ex: 1913)
+python /opencode-runtime/.opencode/skills/consulta-zoho-tickets/scripts/zoho_ticket_history.py --ticket-number 1913
+
+# Pelo ID interno
+python /opencode-runtime/.opencode/skills/consulta-zoho-tickets/scripts/zoho_ticket_history.py --ticket-id 658772000020421294
+```
+
+Retorna JSON com comentários, mudanças de status, atualizações de campo e eventos de SLA.

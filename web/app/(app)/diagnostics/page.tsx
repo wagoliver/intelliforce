@@ -31,24 +31,6 @@ const STATUS_LABEL: Record<Status, string> = {
   error: "Erro",
 };
 
-const STATUS_TONE: Record<Status, { bar: string; pill: string; text: string }> = {
-  ok: {
-    bar: "bg-[rgb(var(--success))]",
-    pill: "bg-[rgb(var(--success))]/15 text-[rgb(var(--success))]",
-    text: "text-[rgb(var(--success))]",
-  },
-  warn: {
-    bar: "bg-[rgb(var(--warning))]",
-    pill: "bg-[rgb(var(--warning))]/15 text-[rgb(var(--warning))]",
-    text: "text-[rgb(var(--warning))]",
-  },
-  error: {
-    bar: "bg-[rgb(var(--danger))]",
-    pill: "bg-[rgb(var(--danger))]/15 text-[rgb(var(--danger))]",
-    text: "text-[rgb(var(--danger))]",
-  },
-};
-
 function formatTimestamp(ts: number): string {
   return new Date(ts * 1000).toLocaleString(undefined, {
     hour: "2-digit",
@@ -68,49 +50,40 @@ function summarizeStatus(checks: CheckResult[]): { status: Status; counts: Recor
 
 function CheckCard({ check }: { check: CheckResult }) {
   const [open, setOpen] = useState(false);
-  const tone = STATUS_TONE[check.status];
   const label = CHECK_LABEL[check.name] ?? check.name;
 
   return (
-    <div className="relative overflow-hidden rounded-xl bg-[rgb(var(--bg-panel))] border border-[rgb(var(--border))]">
-      <div className={`absolute left-0 top-0 bottom-0 w-1 ${tone.bar}`} aria-hidden="true" />
-      <div className="pl-6 pr-5 py-4">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="font-semibold text-base">{label}</h3>
-              <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full ${tone.pill}`}>
-                <span className={`size-1.5 rounded-full ${tone.bar}`} />
-                {STATUS_LABEL[check.status]}
-              </span>
-            </div>
-            <p className="mt-1 text-sm text-[rgb(var(--fg-muted))]">{check.summary}</p>
-          </div>
-        </div>
-
-        {check.recommendation && (
-          <div className="mt-3 rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--bg-subtle))] px-3 py-2">
-            <div className="text-xs font-semibold uppercase tracking-wide text-[rgb(var(--fg-subtle))]">
-              Recomendação
-            </div>
-            <p className="mt-1 text-sm whitespace-pre-line">{check.recommendation}</p>
-          </div>
-        )}
-
-        <button
-          type="button"
-          className="mt-3 text-xs text-[rgb(var(--fg-muted))] hover:text-[rgb(var(--fg))] underline-offset-2 hover:underline"
-          onClick={() => setOpen((o) => !o)}
-        >
-          {open ? "Ocultar detalhes" : "Ver detalhes"}
-        </button>
-
-        {open && (
-          <pre className="mt-2 text-xs bg-[rgb(var(--bg-subtle))] border border-[rgb(var(--border))] rounded-md p-3 overflow-x-auto">
-            {JSON.stringify(check.details, null, 2)}
-          </pre>
-        )}
+    <div className={`diagnostics-card diagnostics-card--${check.status}`}>
+      <div className="diagnostics-card-head">
+        <h3 className="diagnostics-card-title">{label}</h3>
+        <span className={`diagnostics-pill diagnostics-pill--${check.status}`}>
+          <span className="diagnostics-pill-dot" aria-hidden="true" />
+          {STATUS_LABEL[check.status]}
+        </span>
       </div>
+
+      <p className="diagnostics-card-summary">{check.summary}</p>
+
+      {check.recommendation && (
+        <div className="diagnostics-recommendation">
+          <div className="diagnostics-recommendation-label">Recomendação</div>
+          <p className="diagnostics-recommendation-text">{check.recommendation}</p>
+        </div>
+      )}
+
+      <button
+        type="button"
+        className="diagnostics-details-toggle"
+        onClick={() => setOpen((o) => !o)}
+      >
+        {open ? "Ocultar detalhes" : "Ver detalhes"}
+      </button>
+
+      {open && (
+        <pre className="diagnostics-details-pre">
+          {JSON.stringify(check.details, null, 2)}
+        </pre>
+      )}
     </div>
   );
 }
@@ -148,55 +121,65 @@ export default function DiagnosticsPage() {
   const summary = report ? summarizeStatus(report.checks) : null;
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-6">
-      <header className="flex items-start justify-between gap-4 flex-wrap mb-6">
-        <div>
-          <h1 className="text-2xl font-semibold">Diagnóstico</h1>
-          <p className="text-sm text-[rgb(var(--fg-muted))] mt-1">
-            Estado dos componentes que costumam quebrar — LM Studio, system prompt e admins.
-          </p>
-          {report && summary && (
-            <div className="mt-3 flex items-center gap-3 text-xs text-[rgb(var(--fg-muted))]">
-              <span className={`font-medium ${STATUS_TONE[summary.status].text}`}>
-                {summary.counts.error > 0
-                  ? `${summary.counts.error} erro${summary.counts.error > 1 ? "s" : ""}`
-                  : summary.counts.warn > 0
-                    ? `${summary.counts.warn} atenção${summary.counts.warn > 1 ? "s" : ""}`
-                    : "tudo ok"}
-              </span>
-              <span>·</span>
-              <span>verificado {formatTimestamp(report.generated_at)}</span>
-            </div>
-          )}
-        </div>
-        <button
-          type="button"
-          onClick={() => void load()}
-          disabled={loading}
-          className="inline-flex items-center gap-2 text-sm font-medium px-3 py-1.5 rounded-md border border-[rgb(var(--border))] hover:bg-[rgb(var(--bg-subtle))] disabled:opacity-50"
-        >
-          {loading ? "Verificando..." : "Rodar de novo"}
-        </button>
-      </header>
+    <div className="diagnostics-content">
+      <div className="diagnostics-inner">
+        <header className="diagnostics-header">
+          <div className="diagnostics-header-text">
+            <span className="diagnostics-eyebrow">
+              <span className="diagnostics-eyebrow-dot" aria-hidden="true" />
+              Saúde do ambiente
+            </span>
+            <h1 className="diagnostics-title">Diagnóstico</h1>
+            <p className="diagnostics-subtitle">
+              Estado dos componentes que costumam quebrar — LM Studio, system prompt e admins.
+            </p>
+            {report && summary && (
+              <div className="diagnostics-meta">
+                <span className={`diagnostics-meta-status diagnostics-meta-status--${summary.status}`}>
+                  {summary.counts.error > 0
+                    ? `${summary.counts.error} erro${summary.counts.error > 1 ? "s" : ""}`
+                    : summary.counts.warn > 0
+                      ? `${summary.counts.warn} atenção${summary.counts.warn > 1 ? "s" : ""}`
+                      : "tudo ok"}
+                </span>
+                <span>·</span>
+                <span>verificado {formatTimestamp(report.generated_at)}</span>
+              </div>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => void load()}
+            disabled={loading}
+            className="diagnostics-rerun"
+          >
+            {loading ? (
+              <>
+                <span className="diagnostics-rerun-spinner" aria-hidden="true" />
+                Verificando…
+              </>
+            ) : (
+              "Rodar de novo"
+            )}
+          </button>
+        </header>
 
-      {error && (
-        <div
-          className="mb-4 rounded-md border border-[rgb(var(--danger))]/30 bg-[rgb(var(--danger))]/5 px-4 py-3 text-sm"
-          role="alert"
-        >
-          {error}
-        </div>
-      )}
+        {error && (
+          <div className="diagnostics-error-banner" role="alert">
+            {error}
+          </div>
+        )}
 
-      {loading && !report ? (
-        <div className="text-sm text-[rgb(var(--fg-muted))]">Verificando ambiente...</div>
-      ) : report ? (
-        <div className="space-y-3">
-          {report.checks.map((c) => (
-            <CheckCard key={c.name} check={c} />
-          ))}
-        </div>
-      ) : null}
+        {loading && !report ? (
+          <div className="diagnostics-empty-msg">Verificando ambiente…</div>
+        ) : report ? (
+          <div className="diagnostics-checks">
+            {report.checks.map((c) => (
+              <CheckCard key={c.name} check={c} />
+            ))}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }

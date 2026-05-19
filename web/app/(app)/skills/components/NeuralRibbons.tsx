@@ -20,7 +20,13 @@ import { useEffect, useRef } from "react";
  * Theme aware: lê tokens CSS via getComputedStyle.
  * Reduced-motion: mantém última pose estática (não some).
  */
-export function NeuralRibbons({ dimmed = false }: { dimmed?: boolean }) {
+export function NeuralRibbons({
+  dimmed = false,
+  className = "skills-neural-ribbons",
+}: {
+  dimmed?: boolean;
+  className?: string;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const dimmedRef = useRef(dimmed);
   // Mantém ref atualizado pra render loop ler valor mais recente sem re-criar effect
@@ -215,7 +221,7 @@ export function NeuralRibbons({ dimmed = false }: { dimmed?: boolean }) {
   return (
     <canvas
       ref={canvasRef}
-      className="skills-neural-ribbons"
+      className={className}
       aria-hidden="true"
     />
   );

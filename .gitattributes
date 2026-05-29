@@ -1,0 +1,36 @@
+# =============================================================================
+# Normalização de line endings
+# =============================================================================
+# Garante que arquivos que rodam dentro de containers Linux (shell scripts,
+# Dockerfiles, entrypoints) cheguem sempre com LF, independente da config
+# de core.autocrlf da máquina que clonou o repo.
+# =============================================================================
+
+# Detecção automática + normalização pra LF no working tree
+* text=auto eol=lf
+
+# Scripts shell — SEMPRE LF (CRLF quebra shebang dentro do container)
+*.sh         text eol=lf
+*.bash       text eol=lf
+
+# Dockerfiles
+Dockerfile*  text eol=lf
+*.dockerfile text eol=lf
+
+# Windows-only — mantém CRLF
+*.bat        text eol=crlf
+*.cmd        text eol=crlf
+*.ps1        text eol=crlf
+
+# Binários — não tocar
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.pdf  binary
+*.zip  binary
+*.tar  binary
+*.gz   binary
+*.woff binary
+*.woff2 binary

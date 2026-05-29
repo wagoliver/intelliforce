@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <title>IntelliForce — Configurações & Saúde</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="settings.css" />
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ===== Sidebar (visual only) ===== -->
+  <aside class="sidebar">
+    <div class="sb-brand">
+      <div class="sb-brand-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7l8-4 8 4M4 7l8 4 8-4M4 7v10l8 4M20 7v10l-8 4M12 11v10"/></svg>
+      </div>
+      <div class="sb-brand-name">IntelliForce</div>
+    </div>
+
+    <div class="sb-org">Northwind Group</div>
+
+    <nav class="sb-nav">
+      <a class="sb-item">◇ Dashboard</a>
+      <a class="sb-item">◆ Skills</a>
+      <a class="sb-item">⌗ Vault</a>
+      <div class="sb-divider"></div>
+      <a class="sb-item active">⚙ Configurações</a>
+    </nav>
+  </aside>
+
+  <!-- ===== Main ===== -->
+  <main>
+
+    <!-- ===== Top bar ===== -->
+    <header class="topbar">
+      <div class="tb-search">
+        <span>⌕</span>
+        <span>Buscar…</span>
+        <kbd>⌘K</kbd>
+      </div>
+      <div class="tb-actions">
+        <div class="tb-account">
+          <div class="tb-avatar">M</div>
+          <div class="tb-account-text">
+            <div class="tb-account-name">Marina</div>
+            <div class="tb-account-org">Operations builder</div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- ===== Canvas ===== -->
+    <div class="canvas">
+
+      <!-- ===== Page header ===== -->
+      <div class="page-header">
+        <div class="ph-eyebrow">Sistema</div>
+        <h1 class="ph-title">Configurações &amp; Saúde</h1>
+        <p class="ph-sub">Estado das peças que mantêm a plataforma rodando. Use <em>Testar</em> pra revalidar um componente; <em>Como configurar</em> abre o guia.</p>
+      </div>
+
+      <!-- ===== Summary bar ===== -->
+      <section class="summary">
+        <div class="sum-stats">
+          <div class="sum-stat">
+            <div class="sum-stat-l">Saudáveis</div>
+            <div class="sum-stat-v"><span class="num-ok">5</span><span class="sum-stat-d"> de 7</span></div>
+          </div>
+          <div class="sum-stat">
+            <div class="sum-stat-l">Atenção</div>
+            <div class="sum-stat-v"><span class="num-warn">1</span></div>
+          </div>
+          <div class="sum-stat">
+            <div class="sum-stat-l">Erro</div>
+            <div class="sum-stat-v"><span class="num-err">1</span></div>
+          </div>
+          <div class="sum-stat sum-stat-meta">
+            <div class="sum-stat-l">Última verificação</div>
+            <div class="sum-stat-v sum-stat-v--mono">há 12s</div>
+          </div>
+        </div>
+        <button class="btn-primary">↻ Testar tudo</button>
+      </section>
+
+      <!-- ===== Hero (componente com problema) ===== -->
+      <article class="hero hero--err">
+        <header class="hero-head">
+          <div class="hero-id">
+            <div class="hero-eyebrow">Provider de LLM</div>
+            <h2 class="hero-title">LM Studio</h2>
+            <p class="hero-sub">Servindo <span class="mono">qwen2.5-coder:32b</span> para os agentes via interface OpenAI-compatible.</p>
+          </div>
+          <div class="chip chip-err">
+            <span class="chip-dot"></span> erro
+          </div>
+        </header>
+
+        <div class="hero-focal">
+          <div class="focal-url mono">host.docker.internal:1234</div>
+          <div class="focal-meta">sem resposta em 2.0s · última checagem há 12s</div>
+        </div>
+
+        <div class="hero-causes">
+          <div class="causes-h">Causas mais prováveis</div>
+          <ul class="causes-list">
+            <li>LM Studio não está rodando neste computador</li>
+            <li><span class="mono">lm link</span> pro Mac não está ativo</li>
+            <li><span class="mono">LLM_BASE_URL</span> aponta pra endereço errado no <span class="mono">.env</span></li>
+          </ul>
+        </div>
+
+        <footer class="hero-foot">
+          <button class="btn-solid">Testar conexão</button>
+          <button class="btn-line">Como configurar →</button>
+        </footer>
+      </article>
+
+      <!-- ===== Grid de stat cards (componentes saudáveis / atenção) ===== -->
+      <section class="grid">
+
+        <!-- OpenCode CLI -->
+        <article class="card">
+          <header class="card-head">
+            <div class="card-title">OpenCode CLI</div>
+            <div class="chip chip-ok"><span class="chip-dot"></span> saudável</div>
+          </header>
+          <div class="metric">
+            <div class="metric-v">0.4.12</div>
+            <div class="metric-l">versão</div>
+          </div>
+          <div class="card-meta">
+            <span>15 skills carregadas</span>
+            <span>agentes: builder, operator</span>
+          </div>
+          <footer class="card-foot">
+            <button class="btn-ghost">Testar</button>
+          </footer>
+        </article>
+
+        <!-- Variáveis de ambiente -->
+        <article class="card card--warn">
+          <header class="card-head">
+            <div class="card-title">Variáveis de ambiente</div>
+            <div class="chip chip-warn"><span class="chip-dot"></span> atenção</div>
+          </header>
+          <div class="metric">
+            <div class="metric-v">11<span class="metric-v-d">/13</span></div>
+            <div class="metric-l">setadas</div>
+          </div>
+          <div class="card-meta">
+            <span>vazias: <span class="mono">LLM_API_KEY</span></span>
+            <span><span class="mono">ANTHROPIC_API_KEY</span></span>
+          </div>
+          <footer class="card-foot">
+            <button class="btn-ghost">Como configurar</button>
+            <button class="btn-ghost">Testar</button>
+          </footer>
+        </article>
+
+        <!-- Worker -->
+        <article class="card">
+          <header class="card-head">
+            <div class="card-title">Worker</div>
+            <div class="chip chip-ok"><span class="chip-dot"></span> saudável</div>
+          </header>
+          <div class="metric">
+            <div class="metric-v">3<span class="metric-v-u">s</span></div>
+            <div class="metric-l">último heartbeat</div>
+          </div>
+          <div class="card-meta">
+            <span>0 tarefas ativas</span>
+            <span>fila <span class="mono">intelliforce:tasks</span></span>
+          </div>
+          <footer class="card-foot">
+            <button class="btn-ghost">Testar</button>
+          </footer>
+        </article>
+
+        <!-- Redis -->
+        <article class="card">
+          <header class="card-head">
+            <div class="card-title">Redis</div>
+            <div class="chip chip-ok"><span class="chip-dot"></span> saudável</div>
+          </header>
+          <div class="metric">
+            <div class="metric-v">1.2<span class="metric-v-u">ms</span></div>
+            <div class="metric-l">latência</div>
+          </div>
+          <div class="card-meta">
+            <span>memória 14 MB</span>
+            <span><span class="mono">redis:6379</span></span>
+          </div>
+          <footer class="card-foot">
+            <button class="btn-ghost">Testar</button>
+          </footer>
+        </article>
+
+        <!-- Postgres -->
+        <article class="card">
+          <header class="card-head">
+            <div class="card-title">Postgres</div>
+            <div class="chip chip-ok"><span class="chip-dot"></span> saudável</div>
+          </header>
+          <div class="metric">
+            <div class="metric-v">head</div>
+            <div class="metric-l">migrations alembic</div>
+          </div>
+          <div class="card-meta">
+            <span>database <span class="mono">intelliforce</span></span>
+            <span><span class="mono">postgres:5432</span></span>
+          </div>
+          <footer class="card-foot">
+            <button class="btn-ghost">Testar</button>
+          </footer>
+        </article>
+
+        <!-- ClickHouse -->
+        <article class="card">
+          <header class="card-head">
+            <div class="card-title">ClickHouse</div>
+            <div class="chip chip-ok"><span class="chip-dot"></span> saudável</div>
+          </header>
+          <div class="metric">
+            <div class="metric-v">OK</div>
+            <div class="metric-l">schema aplicado</div>
+          </div>
+          <div class="card-meta">
+            <span>database <span class="mono">intelliforce_audit</span></span>
+            <span><span class="mono">clickhouse:8123</span></span>
+          </div>
+          <footer class="card-foot">
+            <button class="btn-ghost">Testar</button>
+          </footer>
+        </article>
+
+      </section>
+
+    </div>
+  </main>
+</div>
+
+</body>
+</html>

@@ -48,6 +48,7 @@
     "skills": "Command Center",
     "vault": "Vault",
     "diagnostics": "Diagnostics",
+    "settings": "Settings",
     "logout": "Logout",
     "toggle_theme": "Toggle theme",
     "notifications": "Notifications"

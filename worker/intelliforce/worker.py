@@ -210,10 +210,33 @@ async def main() -> None:
 
 
 async def _heartbeat_loop() -> None:
+    """Escreve worker:last_heartbeat no Redis a cada 10s.
+
+    Lido por /diagnostics/status pra detectar worker travado/morto. Intervalo
+    curto (10s) pra que o card de saúde detecte queda rápido — janelas em
+    diagnostics.py: ok < 30s, warn < 90s, err >= 90s.
+    """
+    from datetime import datetime, timezone
+
+    import redis.asyncio as redis_async
+
     log = structlog.get_logger()
-    while True:
-        await asyncio.sleep(60)
-        log.info("worker.heartbeat")
+    settings = get_settings()
+    client = redis_async.from_url(settings.redis_url)
+    try:
+        while True:
+            try:
+                now_iso = datetime.now(timezone.utc).isoformat()
+                # TTL 60s — se o worker morrer, a key expira sozinha e o checker
+                # passa a ver None (status=unknown) em vez de timestamp velho.
+                await client.set("worker:last_heartbeat", now_iso, ex=60)
+                log.debug("worker.heartbeat", at=now_iso)
+            except Exception:
+                log.exception("worker.heartbeat_failed")
+            await asyncio.sleep(10)
+    finally:
+        with suppress(Exception):
+            await client.aclose()
 
 
 if __name__ == "__main__":

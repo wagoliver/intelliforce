@@ -26,6 +26,7 @@ const Ico: any = {
   home: <path d="M3 9.5l5-5 5 5V13a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5z" stroke="currentColor" strokeWidth="1.4" fill="none" strokeLinejoin="round"/>,
   skills: <path d="M8 2.5l5 2.5v3c0 3-2 5.5-5 6.5-3-1-5-3.5-5-6.5V5l5-2.5z" stroke="currentColor" strokeWidth="1.4" fill="none"/>,
   vault: <g stroke="currentColor" strokeWidth="1.4" fill="none"><path d="M5 7V5.5a3 3 0 0 1 6 0V7"/><rect x="3.5" y="7" width="9" height="6" rx="1"/><circle cx="8" cy="10" r="0.9" fill="currentColor" stroke="none"/></g>,
+  settings: <g stroke="currentColor" strokeWidth="1.4" fill="none"><circle cx="8" cy="8" r="2"/><path d="M8 1.5v2M8 12.5v2M14.5 8h-2M3.5 8h-2M12.6 3.4l-1.4 1.4M4.8 11.2l-1.4 1.4M12.6 12.6l-1.4-1.4M4.8 4.8L3.4 3.4"/></g>,
   search: <g stroke="currentColor" strokeWidth="1.4" fill="none"><circle cx="6.5" cy="6.5" r="3.5"/><path d="M9 9l3 3"/></g>,
   bell: <g stroke="currentColor" strokeWidth="1.4" fill="none"><path d="M4 11V7a4 4 0 0 1 8 0v4l1 1H3l1-1zM7 13h2"/></g>,
   theme: <g stroke="currentColor" strokeWidth="1.4" fill="none"><path d="M11 8.5A4 4 0 0 1 7.5 4 a4 4 0 1 0 3.5 4.5z"/></g>,
@@ -59,6 +60,7 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
     { id: "home", name: t("home"), icon: "home", href: "/dashboard", match: ["/dashboard"] },
     { id: "skills", name: t("skills"), icon: "skills", href: "/skills", match: ["/skills"] },
     { id: "vault", name: t("vault"), icon: "vault", href: "/vault", match: ["/vault"] },
+    { id: "settings", name: t("settings"), icon: "settings", href: "/settings", match: ["/settings"] },
   ];
 
   function renderEntry(i: NavEntry) {
@@ -165,6 +167,7 @@ function pageTitleFor(pathname: string | null, t: (k: string) => string): string
   if (pathname.startsWith("/dashboard")) return t("home");
   if (pathname.startsWith("/skills")) return t("skills");
   if (pathname.startsWith("/vault")) return t("vault");
+  if (pathname.startsWith("/settings")) return t("settings");
   return "";
 }
 

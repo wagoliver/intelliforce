@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
 
 from intelliforce.api.routes import (
-    agents, approvals, audit, auth, chat, departments, health,
+    agents, approvals, audit, auth, chat, departments, diagnostics, health,
     instances, metrics, opencode, people, search, secrets, tasks,
 )
 from intelliforce.settings import get_settings
@@ -121,6 +121,7 @@ def create_app() -> FastAPI:
     app.include_router(audit.router)
     app.include_router(chat.router)
     app.include_router(departments.router)
+    app.include_router(diagnostics.router)
     app.include_router(instances.router)
     app.include_router(metrics.router)
     app.include_router(opencode.router)

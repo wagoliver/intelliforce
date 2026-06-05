@@ -195,6 +195,29 @@ services:
       - intelliforce-net
 
   # ---------------------------------------------------------------------------
+  # Mobile IntelliForce (Next.js PWA — front dedicado a celular)
+  # ---------------------------------------------------------------------------
+  mobile:
+    build:
+      context: ./mobile
+      dockerfile: Dockerfile
+    image: intelliforce-mobile:latest
+    container_name: intelliforce-mobile
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000     # browser → host
+      API_URL_INTERNAL: http://api:8000              # server-side dentro do container
+      NEXT_PUBLIC_BASE_URL: http://localhost:3002
+      NODE_ENV: production
+    ports:
+      - "3002:3002"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - intelliforce-net
+
+  # ---------------------------------------------------------------------------
   # Smoke test (roda automaticamente a cada `docker compose up`)
   # ---------------------------------------------------------------------------
   # Valida cada peça (Redis, ClickHouse, API, auth chain, OpenCode CLI,

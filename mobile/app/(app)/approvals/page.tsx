@@ -3,6 +3,7 @@
 import { Check, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
+import { ScreenHeader } from "@/components/layout/ScreenHeader";
 import { Sheet } from "@/components/ui/Sheet";
 import { approvals, type ApprovalOut } from "@/lib/api/approvals";
 
@@ -74,7 +75,8 @@ export default function ApprovalsPage() {
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="stagger flex flex-col gap-3">
+      <ScreenHeader eyebrow="Human-in-the-loop" title="Aprovações" />
       {error && (
         <p className="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>
       )}
@@ -90,7 +92,7 @@ export default function ApprovalsPage() {
       {items?.map((a) => {
         const isBusy = busy === a.id;
         return (
-          <div key={a.id} className="panel p-4">
+          <div key={a.id} className="panel card-glow p-4">
             <div className="mb-1 flex items-center justify-between">
               <span className="badge bg-warning/15 text-warning">Pendente</span>
               <span className="text-xs text-fg-subtle">{formatAge(a.created_at)}</span>
@@ -107,7 +109,7 @@ export default function ApprovalsPage() {
                 type="button"
                 onClick={() => doApprove(a)}
                 disabled={isBusy}
-                className="btn-primary flex-1"
+                className="btn-primary btn-gradient flex-1"
               >
                 <Check size={16} /> Aprovar
               </button>

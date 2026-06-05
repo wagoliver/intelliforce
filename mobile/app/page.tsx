@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-// Raiz redireciona pra área autenticada; o middleware manda pro /login se não houver sessão.
+// Raiz redireciona pro Centro de Comando; o middleware manda pro /login se não houver sessão.
 export default function RootPage() {
-  redirect("/dashboard");
+  redirect("/command");
 }

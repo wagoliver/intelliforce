@@ -28,5 +28,5 @@ export async function loginAction(_prev: LoginState, formData: FormData): Promis
   }
 
   // redirect lança NEXT_REDIRECT — propaga corretamente pelo useFormState.
-  redirect("/dashboard");
+  redirect("/command");
 }

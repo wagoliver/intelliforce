@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+import { ScreenHeader } from "@/components/layout/ScreenHeader";
 import { Sheet } from "@/components/ui/Sheet";
 import { formatRelativeAge } from "@/lib/api/diagnostics";
 import { isCancelable, tasks, type TaskOut } from "@/lib/api/tasks";
@@ -62,7 +63,8 @@ export default function TasksPage() {
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="stagger flex flex-col gap-3">
+      <ScreenHeader eyebrow="Execuções" title="Tarefas" />
       {/* Filtros */}
       <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
         {FILTERS.map((f) => (
@@ -102,7 +104,7 @@ export default function TasksPage() {
             key={t.id}
             type="button"
             onClick={() => setSelected(t)}
-            className="panel p-4 text-left"
+            className="panel card-glow p-4 text-left"
           >
             <div className="mb-1.5 flex items-center justify-between">
               <span className={`badge ${meta.cls}`}>{meta.label}</span>

@@ -7,7 +7,7 @@ import { getLocale, getMessages } from "next-intl/server";
 import { RegisterSW } from "@/components/pwa/RegisterSW";
 
 import "./globals.css";
-import "./dark-theme.css";
+import "./portal-theme.css";
 
 export const metadata: Metadata = {
   title: "IntelliForce Mobile",
@@ -28,12 +28,22 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  // Trava o zoom (no PWA standalone o iOS respeita isto) — evita a tela
+  // "fora de foco" ao tocar nos campos. text-base (16px) nos inputs já evita
+  // o auto-zoom no Safari normal.
+  maximumScale: 1,
+  userScalable: false,
   viewportFit: "cover",
+  // Faz o conteúdo redimensionar quando o teclado abre (em vez de sobrepor).
+  interactiveWidget: "resizes-content",
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#fafafa" },
     { media: "(prefers-color-scheme: dark)", color: "#09090b" },
   ],
 };
+
+// Resolve o tema antes do paint (sem flash): cookie if_theme, senão o do sistema.
+const THEME_INIT = `(function(){try{var m=document.cookie.match(/(?:^|; )if_theme=(dark|light)/);var t=m?m[1]:((window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light');document.documentElement.classList.toggle('dark',t==='dark');}catch(e){}})();`;
 
 export default async function RootLayout({
   children,
@@ -46,8 +56,9 @@ export default async function RootLayout({
   const theme = store.get("if_theme")?.value === "dark" ? "dark" : "light";
 
   return (
-    <html lang={locale} data-theme={theme} className={theme === "dark" ? "dark" : ""}>
+    <html lang={locale} className={theme === "dark" ? "dark" : ""} suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT }} />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link

@@ -3,6 +3,7 @@
 import { RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
+import { ScreenHeader } from "@/components/layout/ScreenHeader";
 import { HealthRadar, deriveHealthLevel } from "@/components/health/HealthRadar";
 import {
   diagnostics,
@@ -57,12 +58,13 @@ export default function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-4">
+      <ScreenHeader eyebrow="Sistema" title="Saúde" />
       {error && (
         <p className="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>
       )}
 
       {/* Hero de saúde */}
-      <div className="panel flex items-center gap-4 p-5">
+      <div className="panel card-glow mesh-hero flex items-center gap-4 p-5">
         <HealthRadar level={level} size={20} />
         <div className="min-w-0 flex-1">
           <p className="font-display text-base font-semibold text-fg">{heroText}</p>
@@ -85,7 +87,7 @@ export default function DashboardPage() {
 
       {/* Contadores */}
       {s && (
-        <div className="grid grid-cols-4 gap-2">
+        <div className="stagger grid grid-cols-4 gap-2">
           <Counter label="Saudáveis" value={s.healthy} color={STATUS_COLOR.ok} />
           <Counter label="Atenção" value={s.warning} color={STATUS_COLOR.warn} />
           <Counter label="Erro" value={s.error} color={STATUS_COLOR.err} />
@@ -95,7 +97,7 @@ export default function DashboardPage() {
 
       {/* Lista de componentes */}
       {status && (
-        <div className="panel divide-y divide-border">
+        <div className="panel stagger divide-y divide-border">
           {status.components.map((c) => (
             <div key={c.id} className="flex items-center gap-3 p-3.5">
               <span

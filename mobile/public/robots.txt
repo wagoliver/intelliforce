@@ -1,0 +1,3 @@
+# IntelliForce Mobile
+User-agent: *
+Disallow:

@@ -70,6 +70,60 @@ html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); f
 .sb-item .ico { width: 16px; height: 16px; color: var(--text-subtle); flex-shrink: 0; }
 .sb-item.active .ico { color: var(--accent); }
 
+/* ===== Indicador de saúde dos serviços (TopBar, ao lado da tela cheia) ===== */
+.tb-health {
+  position: relative;
+  width: 34px; height: 34px;
+  display: grid; place-items: center;
+  border: 1px solid transparent; border-radius: 8px;
+  text-decoration: none;
+  cursor: pointer;
+}
+.tb-health:hover { background: var(--bg-sunken); }
+
+/* Núcleo sólido do ponto; --wave define a cor das ondas conforme o status. */
+.health-dot {
+  position: relative;
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--wave);
+}
+.health-dot.is-ok   { --wave: var(--success); }
+.health-dot.is-warn { --wave: var(--warning); }
+.health-dot.is-err  { --wave: var(--danger); }
+
+/* Ondas de rádio: dois anéis emanando do núcleo, escalando e sumindo no alpha.
+   O ::after entra defasado meio ciclo pra dar um trem contínuo de ondas. */
+.health-dot::before,
+.health-dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--wave);
+  z-index: -1;
+  animation: radio-wave 2.4s cubic-bezier(0.22, 0.61, 0.36, 1) infinite;
+}
+.health-dot::after { animation-delay: 1.2s; }
+/* Erro pulsa mais rápido e mais intenso, pra puxar o olhar. */
+.health-dot.is-err::before,
+.health-dot.is-err::after { animation-duration: 1.6s; }
+.health-dot.is-err::after { animation-delay: 0.8s; }
+
+@keyframes radio-wave {
+  0%   { transform: scale(1);   opacity: 0.55; }
+  70%  { opacity: 0; }
+  100% { transform: scale(4);   opacity: 0; }
+}
+
+/* Sem movimento: vira um halo estático suave, mantendo o sinal de cor. */
+@media (prefers-reduced-motion: reduce) {
+  .health-dot::before,
+  .health-dot::after { animation: none; }
+  .health-dot {
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--wave) 20%, transparent);
+  }
+}
+
 /* ===== Top bar ===== */
 .topbar { display: flex; align-items: center; justify-content: space-between; padding: 16px 40px; border-bottom: 1px solid var(--border); background: var(--bg); position: sticky; top: 0; z-index: 5; }
 /* Título da página atual à esquerda do TopBar (substituiu a busca falsa) */

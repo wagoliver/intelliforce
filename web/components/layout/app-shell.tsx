@@ -8,6 +8,7 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import { GlobalSearch } from "@/components/search/global-search";
 import { UserMenu } from "@/components/user-menu";
+import { diagnostics, type DiagnosticsSummary } from "@/lib/api/diagnostics";
 
 import "./app-shell.css";
 
@@ -44,6 +45,68 @@ function isActive(pathname: string | null, href: string, prefixes: string[] = []
   if (pathname === href) return true;
   if (prefixes.some((p) => pathname.startsWith(p))) return true;
   return false;
+}
+
+type HealthLevel = "ok" | "warn" | "err";
+
+/** Reduz o summary de diagnóstico aos 3 estados visuais: verde / âmbar / vermelho.
+   `unknown` (não verificável) cai em âmbar — algo precisa de um olhar. */
+function deriveHealthLevel(s: DiagnosticsSummary): HealthLevel {
+  if (s.error > 0) return "err";
+  if (s.warning > 0 || s.unknown > 0) return "warn";
+  return "ok";
+}
+
+/** Texto do tooltip do indicador, derivado dos contadores. */
+function healthLabel(level: HealthLevel, summary: DiagnosticsSummary | null): string {
+  if (level === "ok") return "Todos os serviços saudáveis";
+  if (!summary) {
+    return level === "err"
+      ? "Há serviços com erro"
+      : "Há serviços que precisam de atenção";
+  }
+  if (level === "err") {
+    return `${summary.error} ${summary.error === 1 ? "serviço" : "serviços"} com erro`;
+  }
+  const parts: string[] = [];
+  if (summary.warning > 0) parts.push(`${summary.warning} em atenção`);
+  if (summary.unknown > 0) {
+    parts.push(`${summary.unknown} ${summary.unknown === 1 ? "indeterminado" : "indeterminados"}`);
+  }
+  return parts.length ? parts.join(" · ") : "Serviços precisam de atenção";
+}
+
+/** Busca o diagnóstico no mount e revalida a cada 5 min, sem bloquear a navegação.
+   Em falha de fetch sinaliza "atenção" (âmbar) sem alarmar, preservando o último nível bom. */
+function useServiceHealth() {
+  const [level, setLevel] = useState<HealthLevel | null>(null);
+  const [summary, setSummary] = useState<DiagnosticsSummary | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      try {
+        const data = await diagnostics.status();
+        if (cancelled) return;
+        setSummary(data.summary);
+        setLevel(deriveHealthLevel(data.summary));
+      } catch {
+        if (cancelled) return;
+        // Não conseguimos verificar — marca atenção sem apagar um estado já conhecido.
+        setLevel((prev) => prev ?? "warn");
+      }
+    }
+
+    void load();
+    const timer = setInterval(() => void load(), 5 * 60 * 1000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, []);
+
+  return { level, summary };
 }
 
 type NavEntry = {
@@ -174,6 +237,17 @@ function pageTitleFor(pathname: string | null, t: (k: string) => string): string
   return "";
 }
 
+function HealthIndicator() {
+  const { level, summary } = useServiceHealth();
+  if (!level) return null;
+  const label = healthLabel(level, summary);
+  return (
+    <Link href="/settings" className="tb-health" title={label} aria-label={label}>
+      <span className={`health-dot is-${level}`} aria-hidden="true" />
+    </Link>
+  );
+}
+
 function TopBar() {
   const tn = useTranslations("nav");
   const pathname = usePathname();
@@ -184,6 +258,7 @@ function TopBar() {
       <div className="tb-page-title">{title}</div>
       <GlobalSearch />
       <div className="tb-actions">
+        <HealthIndicator />
         <FullscreenButton />
         <div className="tb-divider" />
         <UserMenu userName={data.user.name} userOrg={data.user.org} userRole={data.user.role} />

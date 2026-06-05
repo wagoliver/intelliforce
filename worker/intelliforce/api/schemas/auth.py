@@ -18,6 +18,10 @@ class UserLoginRequest(BaseModel):
     password: str
 
 
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+
 class UserOut(BaseModel):
     id: uuid.UUID
     email: EmailStr

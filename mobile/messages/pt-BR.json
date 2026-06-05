@@ -58,7 +58,8 @@
       "approvals": "Aprovações",
       "command": "Comando",
       "dashboard": "Painel",
-      "tasks": "Tarefas"
+      "tasks": "Tarefas",
+      "team": "Equipe"
     },
     "voice": {
       "hold_to_talk": "Segure para falar",

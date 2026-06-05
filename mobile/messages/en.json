@@ -58,7 +58,8 @@
       "approvals": "Approvals",
       "command": "Command",
       "dashboard": "Dashboard",
-      "tasks": "Tasks"
+      "tasks": "Tasks",
+      "team": "Team"
     },
     "voice": {
       "hold_to_talk": "Hold to talk",

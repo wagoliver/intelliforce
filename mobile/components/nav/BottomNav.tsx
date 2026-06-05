@@ -1,6 +1,6 @@
 "use client";
 
-import { ClipboardCheck, LayoutDashboard, ListChecks, MessageSquare } from "lucide-react";
+import { Building2, ClipboardCheck, LayoutDashboard, ListChecks, MessageSquare } from "lucide-react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -9,6 +9,7 @@ const TABS = [
   { href: "/command", key: "command", Icon: MessageSquare },
   { href: "/approvals", key: "approvals", Icon: ClipboardCheck },
   { href: "/tasks", key: "tasks", Icon: ListChecks },
+  { href: "/departments", key: "team", Icon: Building2 },
   { href: "/dashboard", key: "dashboard", Icon: LayoutDashboard },
 ] as const;
 

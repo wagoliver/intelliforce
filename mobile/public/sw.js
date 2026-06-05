@@ -57,3 +57,40 @@ async function networkFirst(req) {
     return new Response("Offline", { status: 503, headers: { "Content-Type": "text/plain" } });
   }
 }
+
+// ===== Web Push (Report Center) =====
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { title: "IntelliForce", body: event.data ? event.data.text() : "" };
+  }
+  const title = data.title || "IntelliForce";
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body: data.body || "",
+      tag: data.tag || "intelliforce",
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
+      data: { url: data.url || "/reports" },
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = (event.notification.data && event.notification.data.url) || "/reports";
+  event.waitUntil(
+    (async () => {
+      const all = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      for (const c of all) {
+        if ("focus" in c) {
+          c.navigate(target);
+          return c.focus();
+        }
+      }
+      return self.clients.openWindow(target);
+    })(),
+  );
+});

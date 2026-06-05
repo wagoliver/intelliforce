@@ -11,7 +11,7 @@ from sqlalchemy.exc import IntegrityError
 
 from intelliforce.api.routes import (
     agents, approvals, audit, auth, chat, chat_sessions, departments, diagnostics,
-    health, instances, metrics, opencode, people, search, secrets, tasks,
+    health, instances, metrics, opencode, people, push, reports, search, secrets, tasks,
 )
 from intelliforce.settings import get_settings
 
@@ -127,6 +127,8 @@ def create_app() -> FastAPI:
     app.include_router(metrics.router)
     app.include_router(opencode.router)
     app.include_router(people.router)
+    app.include_router(push.router)
+    app.include_router(reports.router)
     app.include_router(search.router)
     app.include_router(secrets.router)
 

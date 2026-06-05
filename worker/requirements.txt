@@ -43,6 +43,11 @@ tenacity==9.0.0  # retry com backoff
 pyyaml==6.0.2    # parse de frontmatter de SKILL.md / agent.md
 cryptography==43.0.3   # Fernet pra Vault — encrypt/decrypt de secrets
 
+# --- Report Center (geração de documentos) ---
+markdown==3.7          # Markdown → HTML
+fpdf2==2.8.7           # HTML → PDF (pure-python, sem deps de sistema)
+pywebpush==2.0.0       # Web Push (VAPID) — notificações do Report Center
+
 # --- LLM provider (abstração OpenAI-compatible) ---
 openai==1.51.0  # cliente OpenAI-compatible serve pra LM Studio
 

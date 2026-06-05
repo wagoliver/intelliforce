@@ -77,6 +77,11 @@ class Settings(BaseSettings):
     jwt_access_token_expire_minutes: int = Field(default=60)
     jwt_refresh_token_expire_days: int = Field(default=7)
 
+    # --- Web Push (VAPID) — notificações do Report Center ---
+    vapid_public_key: str = Field(default="")
+    vapid_private_key: str = Field(default="")
+    vapid_subject: str = Field(default="mailto:admin@arctica.com.br")
+
     # --- Vault (cofre de secrets) ---
     # Master key Fernet (urlsafe-base64 de 32 bytes). Gerar via:
     #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"

@@ -59,7 +59,9 @@
       "command": "Command",
       "dashboard": "Dashboard",
       "tasks": "Tasks",
-      "team": "Team"
+      "team": "Team",
+      "more": "More",
+      "reports": "Reports"
     },
     "voice": {
       "hold_to_talk": "Hold to talk",

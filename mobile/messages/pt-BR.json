@@ -59,7 +59,9 @@
       "command": "Comando",
       "dashboard": "Painel",
       "tasks": "Tarefas",
-      "team": "Equipe"
+      "team": "Equipe",
+      "more": "Mais",
+      "reports": "Relatórios"
     },
     "voice": {
       "hold_to_talk": "Segure para falar",

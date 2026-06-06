@@ -2,11 +2,26 @@
 // injetando o cookie httpOnly como Authorization Bearer.
 //
 // Permite que Client Components consumam a API sem expor o token no JS.
+//
+// Renovação automática: o middleware não roda em /api (matcher exclui), então
+// aqui mesmo, em 401, tentamos renovar a sessão com o if_refresh, repetimos a
+// requisição original e gravamos o novo if_token no browser.
 
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
+import {
+  accessCookieOptions,
+  refreshCookieOptions,
+  tryRefresh,
+  type RefreshedTokens,
+} from "@/lib/auth/refresh";
+
 const BACKEND = process.env.API_URL_INTERNAL ?? "http://api:8000";
+
+// HTTP spec / Fetch API: 204/205/304 NÃO podem carregar body. O Response do
+// undici (Node 18+) joga TypeError se passarmos string vazia em vez de null.
+const NULL_BODY_STATUSES = new Set([204, 205, 304]);
 
 async function forward(req: NextRequest, pathSegments: string[], method: string) {
   const path = pathSegments.join("/");
@@ -15,38 +30,48 @@ async function forward(req: NextRequest, pathSegments: string[], method: string)
 
   const cookieStore = await cookies();
   const token = cookieStore.get("if_token")?.value;
+  const refreshToken = cookieStore.get("if_refresh")?.value;
 
-  const headers: Record<string, string> = {
-    Accept: req.headers.get("Accept") ?? "application/json",
-  };
   const ct = req.headers.get("Content-Type");
-  if (ct) headers["Content-Type"] = ct;
-  if (token) headers.Authorization = `Bearer ${token}`;
-
+  const accept = req.headers.get("Accept") ?? "application/json";
   const hasBody = !["GET", "HEAD"].includes(method);
   const body = hasBody ? await req.text() : undefined;
 
-  const upstream = await fetch(url, { method, headers, body, cache: "no-store" });
-  const text = await upstream.text();
-
-  // HTTP spec / Fetch API: status 204 (No Content), 205 (Reset Content) e
-  // 304 (Not Modified) NÃO podem carregar body. O `Response` constructor do
-  // undici (Node 18+) valida isso e joga TypeError("Invalid response status
-  // code 204") se passarmos string vazia em vez de null.
-  const NULL_BODY_STATUSES = new Set([204, 205, 304]);
-  const responseBody = NULL_BODY_STATUSES.has(upstream.status) ? null : text;
-
-  // Pra respostas sem-body, não fazemos sentido forçar Content-Type.
-  const responseHeaders: Record<string, string> = {};
-  if (!NULL_BODY_STATUSES.has(upstream.status)) {
-    responseHeaders["Content-Type"] =
-      upstream.headers.get("Content-Type") ?? "application/json";
+  function buildHeaders(tok: string | undefined): Record<string, string> {
+    const h: Record<string, string> = { Accept: accept };
+    if (ct) h["Content-Type"] = ct;
+    if (tok) h.Authorization = `Bearer ${tok}`;
+    return h;
   }
 
-  return new NextResponse(responseBody, {
-    status: upstream.status,
-    headers: responseHeaders,
-  });
+  let upstream = await fetch(url, { method, headers: buildHeaders(token), body, cache: "no-store" });
+
+  // Sessão expirou: renova uma vez e repete a requisição original.
+  let refreshed: RefreshedTokens | null = null;
+  if (upstream.status === 401 && refreshToken) {
+    refreshed = await tryRefresh(refreshToken);
+    if (refreshed) {
+      upstream = await fetch(url, {
+        method,
+        headers: buildHeaders(refreshed.access),
+        body,
+        cache: "no-store",
+      });
+    }
+  }
+
+  const text = await upstream.text();
+  const responseBody = NULL_BODY_STATUSES.has(upstream.status) ? null : text;
+
+  const res = new NextResponse(responseBody, { status: upstream.status });
+  if (!NULL_BODY_STATUSES.has(upstream.status)) {
+    res.headers.set("Content-Type", upstream.headers.get("Content-Type") ?? "application/json");
+  }
+  if (refreshed) {
+    res.cookies.set("if_token", refreshed.access, accessCookieOptions());
+    res.cookies.set("if_refresh", refreshed.refresh, refreshCookieOptions());
+  }
+  return res;
 }
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {

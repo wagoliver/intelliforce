@@ -46,6 +46,7 @@
   "nav": {
     "home": "Home",
     "skills": "Command Center",
+    "reports": "Reports",
     "vault": "Vault",
     "diagnostics": "Diagnostics",
     "settings": "Settings",

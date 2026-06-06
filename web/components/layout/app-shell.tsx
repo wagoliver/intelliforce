@@ -26,6 +26,7 @@ const BrandMark = () => (
 const Ico: any = {
   home: <path d="M3 9.5l5-5 5 5V13a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5z" stroke="currentColor" strokeWidth="1.4" fill="none" strokeLinejoin="round"/>,
   skills: <path d="M8 2.5l5 2.5v3c0 3-2 5.5-5 6.5-3-1-5-3.5-5-6.5V5l5-2.5z" stroke="currentColor" strokeWidth="1.4" fill="none"/>,
+  reports: <g stroke="currentColor" strokeWidth="1.4" fill="none" strokeLinecap="round" strokeLinejoin="round"><path d="M4 2.5h5l3 3V13a.5.5 0 0 1-.5.5h-7A.5.5 0 0 1 4 13V3a.5.5 0 0 1 .5-.5z"/><path d="M9 2.5v3h3M6 8h4M6 10.5h4"/></g>,
   vault: <g stroke="currentColor" strokeWidth="1.4" fill="none"><path d="M5 7V5.5a3 3 0 0 1 6 0V7"/><rect x="3.5" y="7" width="9" height="6" rx="1"/><circle cx="8" cy="10" r="0.9" fill="currentColor" stroke="none"/></g>,
   diagnostics: <g stroke="currentColor" strokeWidth="1.4" fill="none" strokeLinecap="round" strokeLinejoin="round"><path d="M3 8h2l1.5-3 3 6L11 8h2"/></g>,
   settings: <g stroke="currentColor" strokeWidth="1.4" fill="none"><circle cx="8" cy="8" r="2"/><path d="M8 1.5v2M8 12.5v2M14.5 8h-2M3.5 8h-2M12.6 3.4l-1.4 1.4M4.8 11.2l-1.4 1.4M12.6 12.6l-1.4-1.4M4.8 4.8L3.4 3.4"/></g>,
@@ -123,6 +124,7 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
   const ops: NavEntry[] = [
     { id: "home", name: t("home"), icon: "home", href: "/dashboard", match: ["/dashboard"] },
     { id: "skills", name: t("skills"), icon: "skills", href: "/skills", match: ["/skills"] },
+    { id: "reports", name: t("reports"), icon: "reports", href: "/reports", match: ["/reports"] },
     { id: "vault", name: t("vault"), icon: "vault", href: "/vault", match: ["/vault"] },
     { id: "diagnostics", name: t("diagnostics"), icon: "diagnostics", href: "/diagnostics", match: ["/diagnostics"] },
     { id: "settings", name: t("settings"), icon: "settings", href: "/settings", match: ["/settings"] },
@@ -231,6 +233,7 @@ function pageTitleFor(pathname: string | null, t: (k: string) => string): string
   if (!pathname) return "";
   if (pathname.startsWith("/dashboard")) return t("home");
   if (pathname.startsWith("/skills")) return t("skills");
+  if (pathname.startsWith("/reports")) return t("reports");
   if (pathname.startsWith("/vault")) return t("vault");
   if (pathname.startsWith("/diagnostics")) return t("diagnostics");
   if (pathname.startsWith("/settings")) return t("settings");
@@ -273,7 +276,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   // /skills e /diagnostics são "telas criativas" — usam o viewport inteiro,
   // escapam do canvas centrado pra renderizar o fundo (mesh + ribbons) full-bleed
   const isFullscreen =
-    !!pathname?.startsWith("/skills") || !!pathname?.startsWith("/diagnostics");
+    !!pathname?.startsWith("/skills") ||
+    !!pathname?.startsWith("/diagnostics") ||
+    !!pathname?.startsWith("/reports");
   return (
     <div className={`app ${collapsed ? "sidebar-collapsed" : ""}`}>
       <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} />

@@ -21,8 +21,6 @@ export function PushToggle() {
     else setState("idle");
   }, []);
 
-  if (state === "unsupported") return null;
-
   async function onClick() {
     setState("loading");
     try {
@@ -42,9 +40,12 @@ export function PushToggle() {
           ? "Ativando…"
           : state === "error"
             ? "Falhou — tente de novo"
-            : "Ativar notificações";
+            : state === "unsupported"
+              ? "Notificações só no app instalado (iOS)"
+              : "Ativar notificações";
 
-  const disabled = state === "on" || state === "denied" || state === "loading";
+  const disabled =
+    state === "on" || state === "denied" || state === "loading" || state === "unsupported";
 
   return (
     <button

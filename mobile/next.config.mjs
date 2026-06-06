@@ -16,6 +16,9 @@ const nextConfig = {
         "127.0.0.1:3002",
         "*.local:3002",
         "*:3002",
+        // Acesso HTTPS via Tailscale serve (necessário p/ Web Push no iOS)
+        "nbarc2000.tailc053c2.ts.net",
+        "*.ts.net",
       ],
     },
   },

@@ -82,6 +82,17 @@ def cmd_list(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_get(args: argparse.Namespace) -> int:
+    base, headers = _client()
+    try:
+        resp = httpx.get(f"{base}/reports/{args.id}", headers=headers, timeout=20.0)
+    except httpx.RequestError as e:
+        print(f"NETWORK_ERROR: {e}", file=sys.stderr)
+        return 1
+    print(json.dumps(_handle(resp), indent=2, ensure_ascii=False, default=str))
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Report Center")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -98,8 +109,11 @@ def main() -> int:
     p_list.add_argument("--department")
     p_list.add_argument("--limit", type=int, default=50)
 
+    p_get = sub.add_parser("get", help="Detalhe de um relatório (inclui o conteúdo)")
+    p_get.add_argument("--id", required=True)
+
     args = parser.parse_args()
-    return {"create": cmd_create, "list": cmd_list}[args.cmd](args)
+    return {"create": cmd_create, "list": cmd_list, "get": cmd_get}[args.cmd](args)
 
 
 if __name__ == "__main__":

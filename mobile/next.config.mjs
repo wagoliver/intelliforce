@@ -18,6 +18,8 @@ const nextConfig = {
         "*:3002",
         // Acesso HTTPS via Tailscale serve (necessário p/ Web Push no iOS)
         "nbarc2000.tailc053c2.ts.net",
+        "mac-mini-de-wagner.tailc053c2.ts.net",
+        "*.tailc053c2.ts.net",
         "*.ts.net",
       ],
     },

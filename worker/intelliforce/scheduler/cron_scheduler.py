@@ -66,6 +66,7 @@ class CronScheduler:
         async with async_session_factory() as session:
             result = await session.execute(
                 select(Activity).where(
+                    Activity.is_active.is_(True),
                     Activity.schedule.isnot(None),
                     Activity.default_agent_id.isnot(None),
                 )
@@ -109,7 +110,7 @@ class CronScheduler:
             async with async_session_factory() as session:
                 act_res = await session.execute(select(Activity).where(Activity.id == activity_id))
                 activity = act_res.scalar_one_or_none()
-                if not activity or not activity.default_agent_id:
+                if not activity or not activity.default_agent_id or not activity.is_active:
                     log.info("scheduler.activity_invalid_skip", activity_id=activity_id)
                     return
 

@@ -20,6 +20,7 @@ import asyncio
 import json
 import os
 from collections.abc import AsyncIterator
+from datetime import timedelta
 
 import structlog
 from fastapi import APIRouter, Depends, Header
@@ -29,10 +30,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from intelliforce.api.deps import get_current_user, get_db
 from intelliforce.api.schemas.chat import ChatRequest, ChatResponse
+from intelliforce.api.security import create_access_token
 from intelliforce.db.models.chat_session import ChatMessage, ChatSession
 from intelliforce.db.models.user import User
 from intelliforce.events.bus import EventBus
 from intelliforce.opencode.runner import OpenCodeRunner
+from intelliforce.settings import get_settings
 
 log = structlog.get_logger()
 
@@ -57,9 +60,16 @@ def _build_extra_env(user: User, authorization: str | None) -> dict[str, str]:
     Scripts das skills (em opencode/.opencode/skills/intelliforce-*/scripts/*.py)
     leem essas vars pra autenticar e localizar a API.
     """
-    token = ""
-    if authorization:
-        token = authorization.removeprefix("Bearer ").removeprefix("bearer ").strip()
+    # Emite um token dedicado pra execução, com validade >= o timeout do OpenCode
+    # (+ margem). O token do header dura só 60 min e expirava no meio de runs
+    # longas, derrubando as chamadas das skills com 401.
+    settings = get_settings()
+    ttl = timedelta(seconds=settings.opencode_timeout_seconds + 600)
+    token = create_access_token(
+        subject=str(user.id),
+        extra_claims={"role": user.role},
+        expires_delta=ttl,
+    )
     return {
         "INTELLIFORCE_TOKEN": token,
         "INTELLIFORCE_API_URL": _INTERNAL_API_URL,

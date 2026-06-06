@@ -51,9 +51,14 @@ COPY worker/ /app/
 # /workspace/opencode é a fonte (volume read-only). /opencode-runtime é onde o
 # entrypoint copia + substitui placeholders {env:VAR} antes de o app rodar.
 WORKDIR /workspace
+# Locale UTF-8 em todo o processo + subprocessos (OpenCode CLI, skills) — evita
+# mojibake (UTF-8 lido como codepage errado) na saída de texto com acentos.
 ENV OPENCODE_CONFIG_PATH=/opencode-runtime \
     PYTHONPATH=/app \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PYTHONUTF8=1 \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8
 
 # -----------------------------------------------------------------------------
 # System seeds — arquivos imutáveis que devem sempre existir e sempre estar

@@ -21,6 +21,7 @@ from intelliforce.db.base import async_session_factory
 from intelliforce.db.models.activity import Activity
 from intelliforce.db.models.task import Task, TaskStatus, TaskTriggerType
 from intelliforce.events.bus import EventBus
+from intelliforce.services.report_retention import prune_old_reports
 
 log = structlog.get_logger()
 
@@ -36,6 +37,13 @@ class CronScheduler:
     async def start(self) -> None:
         self.scheduler.start()
         self._running = True
+        # Job diário de retenção do Report Center (03:00 UTC).
+        self.scheduler.add_job(
+            prune_old_reports,
+            CronTrigger(hour=3, minute=0),
+            id="reports-retention",
+            replace_existing=True,
+        )
         log.info("scheduler.started", sync_interval=self.sync_interval)
         await self._sync_loop()
 

@@ -82,6 +82,10 @@ class Settings(BaseSettings):
     vapid_private_key: str = Field(default="")
     vapid_subject: str = Field(default="mailto:admin@arctica.com.br")
 
+    # --- Report Center ---
+    # Relatórios mais antigos que isso são apagados pelo job diário. 0 = nunca.
+    reports_retention_days: int = Field(default=30)
+
     # --- Vault (cofre de secrets) ---
     # Master key Fernet (urlsafe-base64 de 32 bytes). Gerar via:
     #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"

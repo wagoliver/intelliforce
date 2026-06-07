@@ -7,30 +7,15 @@ import { redirect } from "next/navigation";
 
 import { apiFetchServer } from "@/lib/api/client.server";
 import type { User } from "@/lib/api/types";
+import { accessCookieOptions, refreshCookieOptions } from "@/lib/auth/refresh";
 
 const COOKIE_NAME = "if_token";
 const COOKIE_REFRESH = "if_refresh";
 
-// Cookie só é "secure" se SECURE_COOKIES=true no env (precisa HTTPS na frente).
-// Em dev/HTTP simples (incluindo IPs em rede local), deixar false pro browser aceitar.
-const SECURE = process.env.SECURE_COOKIES === "true";
-
 export async function setSessionCookies(access: string, refresh: string) {
   const store = await cookies();
-  store.set(COOKIE_NAME, access, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: SECURE,
-    path: "/",
-    maxAge: 60 * 60,
-  });
-  store.set(COOKIE_REFRESH, refresh, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: SECURE,
-    path: "/",
-    maxAge: 60 * 60 * 24 * 7,
-  });
+  store.set(COOKIE_NAME, access, accessCookieOptions());
+  store.set(COOKIE_REFRESH, refresh, refreshCookieOptions());
 }
 
 export async function clearSessionCookies() {

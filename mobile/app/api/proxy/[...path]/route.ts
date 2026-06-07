@@ -6,31 +6,16 @@
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
+import {
+  accessCookieOptions,
+  refreshCookieOptions,
+  tryRefresh,
+  type RefreshedTokens,
+} from "@/lib/auth/refresh";
+
 const BACKEND = process.env.API_URL_INTERNAL ?? "http://api:8000";
-const SECURE = process.env.SECURE_COOKIES === "true";
-const ACCESS_MAX_AGE = 60 * 60;
-const REFRESH_MAX_AGE = 60 * 60 * 24 * 7;
 
 const NULL_BODY_STATUSES = new Set([204, 205, 304]);
-
-async function tryRefresh(
-  refreshToken: string,
-): Promise<{ access: string; refresh: string } | null> {
-  try {
-    const r = await fetch(`${BACKEND}/auth/refresh`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({ refresh_token: refreshToken }),
-      cache: "no-store",
-    });
-    if (!r.ok) return null;
-    const data = await r.json();
-    if (!data?.access_token) return null;
-    return { access: data.access_token, refresh: data.refresh_token ?? refreshToken };
-  } catch {
-    return null;
-  }
-}
 
 async function forward(req: NextRequest, pathSegments: string[], method: string) {
   const path = pathSegments.join("/");
@@ -55,7 +40,7 @@ async function forward(req: NextRequest, pathSegments: string[], method: string)
   let upstream = await fetch(url, { method, headers: buildHeaders(token), body, cache: "no-store" });
 
   // Sessão expirou: tenta renovar uma vez e repete a requisição original.
-  let refreshed: { access: string; refresh: string } | null = null;
+  let refreshed: RefreshedTokens | null = null;
   if (upstream.status === 401 && refreshToken) {
     refreshed = await tryRefresh(refreshToken);
     if (refreshed) {
@@ -79,20 +64,8 @@ async function forward(req: NextRequest, pathSegments: string[], method: string)
     );
   }
   if (refreshed) {
-    res.cookies.set("if_token", refreshed.access, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: SECURE,
-      path: "/",
-      maxAge: ACCESS_MAX_AGE,
-    });
-    res.cookies.set("if_refresh", refreshed.refresh, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: SECURE,
-      path: "/",
-      maxAge: REFRESH_MAX_AGE,
-    });
+    res.cookies.set("if_token", refreshed.access, accessCookieOptions());
+    res.cookies.set("if_refresh", refreshed.refresh, refreshCookieOptions());
   }
   return res;
 }

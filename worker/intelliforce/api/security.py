@@ -60,6 +60,14 @@ def create_refresh_token(*, subject: str) -> str:
 def decode_token(token: str) -> dict[str, Any]:
     settings = get_settings()
     try:
-        return jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+        return jwt.decode(
+            token,
+            settings.jwt_secret,
+            algorithms=[settings.jwt_algorithm],
+            # Tolerância pra clock skew entre containers/hosts (Docker Desktop
+            # no macOS drifta o relógio da VM após sleep) — sem isso um token
+            # recém-emitido pode ser rejeitado como expirado.
+            options={"leeway": 30},
+        )
     except JWTError as e:
         raise ValueError(f"Token inválido: {e}") from e

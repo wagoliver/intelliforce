@@ -1,17 +1,23 @@
 #!/usr/bin/env python3
 """
 Consulta o histórico completo de um ticket específico no Zoho Desk.
-Busca credenciais no Vault, renova token em memória, retorna JSON bruto.
+Busca credenciais no Vault, renova token em memória, retorna JSON.
 
 Uso:
   python zoho_ticket_history.py --ticket-number 1913
   python zoho_ticket_history.py --ticket-id 658772000020421294
+  python zoho_ticket_history.py --ticket-number 1913 --with-comments --with-threads
 
 Use --ticket-number com o número visível do ticket (ex: 1913) ou
 --ticket-id com o ID interno do Zoho. São mutuamente exclusivos.
+
+Flags opcionais:
+  --with-comments  Inclui comentarios manuais (notas internas, integracoes)
+  --with-threads   Inclui threads (trocas de e-mail com resumo)
 """
 import argparse
 import json
+import re
 import subprocess
 import sys
 
@@ -106,8 +112,8 @@ def resolve_internal_id(ticket_number: str, access_token: str) -> str:
     sys.exit(1)
 
 
-def fetch_ticket_history(ticket_id: str, access_token: str) -> str:
-    """Busca o histórico completo de um ticket e retorna o JSON bruto."""
+def fetch_ticket_history(ticket_id: str, access_token: str) -> list:
+    """Busca o histórico completo de um ticket e retorna a lista de eventos."""
     headers = {
         "Authorization": f"Zoho-oauthtoken {access_token}",
         "orgId": ORG_ID,
@@ -124,7 +130,55 @@ def fetch_ticket_history(ticket_id: str, access_token: str) -> str:
             file=sys.stderr,
         )
         sys.exit(1)
-    return resp.text
+    return resp.json()
+
+
+def fetch_ticket_comments(ticket_id: str, access_token: str) -> list:
+    """
+    Busca comentarios manuais de um ticket.
+    Retorna lista de comentarios com bodyPlainText e bodyHtml.
+    """
+    headers = {
+        "Authorization": f"Zoho-oauthtoken {access_token}",
+        "orgId": ORG_ID,
+    }
+    resp = requests.get(
+        f"{ZOHO_BASE}/tickets/{ticket_id}/comments",
+        headers=headers,
+        timeout=15,
+    )
+    if resp.status_code != 200:
+        print(
+            f"Erro ao buscar comentarios do ticket {ticket_id}: "
+            f"{resp.status_code} - {resp.text}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    return resp.json().get("data", [])
+
+
+def fetch_ticket_threads(ticket_id: str, access_token: str) -> list:
+    """
+    Busca threads (trocas de e-mail) de um ticket.
+    Retorna lista de threads com summary, author, direction, etc.
+    """
+    headers = {
+        "Authorization": f"Zoho-oauthtoken {access_token}",
+        "orgId": ORG_ID,
+    }
+    resp = requests.get(
+        f"{ZOHO_BASE}/tickets/{ticket_id}/threads",
+        headers=headers,
+        timeout=15,
+    )
+    if resp.status_code != 200:
+        print(
+            f"Erro ao buscar threads do ticket {ticket_id}: "
+            f"{resp.status_code} - {resp.text}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    return resp.json().get("data", [])
 
 
 # ──────────────────────────────────────────
@@ -145,6 +199,18 @@ def main():
         default=None,
         help="ID interno do ticket no Zoho Desk (ex: 658772000020421294).",
     )
+    parser.add_argument(
+        "--with-comments",
+        action="store_true",
+        default=False,
+        help="Incluir comentarios manuais no output.",
+    )
+    parser.add_argument(
+        "--with-threads",
+        action="store_true",
+        default=False,
+        help="Incluir threads (trocas de e-mail) com resumo no output.",
+    )
     args = parser.parse_args()
 
     # 1. Credenciais do Vault (secret multi-campo `zoho`)
@@ -163,10 +229,29 @@ def main():
         internal_id = args.ticket_id
 
     # 4. Busca histórico do ticket
-    history_json = fetch_ticket_history(internal_id, access_token)
+    history_data = fetch_ticket_history(internal_id, access_token)
 
-    # 5. Imprime JSON bruto
-    print(history_json)
+    # 5. Busca comentários se --with-comments
+    comments_data = []
+    if args.with_comments:
+        comments_data = fetch_ticket_comments(internal_id, access_token)
+
+    # 5b. Busca threads se --with-threads
+    threads_data = []
+    if args.with_threads:
+        threads_data = fetch_ticket_threads(internal_id, access_token)
+
+    # 6. Monta output estruturado
+    output = {
+        "history": history_data,
+    }
+    if args.with_comments:
+        output["comments"] = comments_data
+    if args.with_threads:
+        output["threads"] = threads_data
+
+    # 7. Imprime JSON
+    print(json.dumps(output, indent=2, ensure_ascii=False))
 
 
 if __name__ == "__main__":

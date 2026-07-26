@@ -126,7 +126,6 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
     { id: "skills", name: t("skills"), icon: "skills", href: "/skills", match: ["/skills"] },
     { id: "reports", name: t("reports"), icon: "reports", href: "/reports", match: ["/reports"] },
     { id: "vault", name: t("vault"), icon: "vault", href: "/vault", match: ["/vault"] },
-    { id: "diagnostics", name: t("diagnostics"), icon: "diagnostics", href: "/diagnostics", match: ["/diagnostics"] },
     { id: "settings", name: t("settings"), icon: "settings", href: "/settings", match: ["/settings"] },
   ];
 
@@ -235,7 +234,6 @@ function pageTitleFor(pathname: string | null, t: (k: string) => string): string
   if (pathname.startsWith("/skills")) return t("skills");
   if (pathname.startsWith("/reports")) return t("reports");
   if (pathname.startsWith("/vault")) return t("vault");
-  if (pathname.startsWith("/diagnostics")) return t("diagnostics");
   if (pathname.startsWith("/settings")) return t("settings");
   return "";
 }
@@ -273,11 +271,10 @@ function TopBar() {
 export function AppShell({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const pathname = usePathname();
-  // /skills e /diagnostics são "telas criativas" — usam o viewport inteiro,
+  // /skills e /reports são "telas criativas" — usam o viewport inteiro,
   // escapam do canvas centrado pra renderizar o fundo (mesh + ribbons) full-bleed
   const isFullscreen =
     !!pathname?.startsWith("/skills") ||
-    !!pathname?.startsWith("/diagnostics") ||
     !!pathname?.startsWith("/reports");
   return (
     <div className={`app ${collapsed ? "sidebar-collapsed" : ""}`}>

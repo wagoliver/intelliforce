@@ -1,7 +1,7 @@
 """Configurações centralizadas, lidas de variáveis de ambiente."""
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -59,7 +59,7 @@ class Settings(BaseSettings):
     # --- LM Studio ---
     lmstudio_base_url: str = Field(default="http://host.docker.internal:1234/v1")
     lmstudio_api_key: str = Field(default="")
-    lmstudio_default_model: str = Field(default="qwen/qwen3.6-27b")
+    lmstudio_default_model: str = Field(default="qwen3.6-27b-mtp")
     lmstudio_max_tokens: int = Field(default=8192)
     lmstudio_context_length: int = Field(default=32768)
     # Kill-switch do lazy retry: se o CLI OpenCode receber "No models loaded",
@@ -112,7 +112,10 @@ class Settings(BaseSettings):
     # TaskExecutor pra autenticar scheduled tasks contra a própria API
     # IntelliForce (Vault, departments, etc.). Vazio = scheduled tasks que
     # tentarem chamar a API vão falhar com TOKEN_EMPTY (warning no startup).
-    worker_token: str = Field(default="")
+    worker_token: str = Field(
+        default="",
+        validation_alias=AliasChoices("INTELLIFORCE_WORKER_TOKEN", "WORKER_TOKEN"),
+    )
     intelliforce_internal_api_url: str = Field(default="http://api:8000")
 
     # --- Task reaper (varre tasks órfãs em `running`) ---

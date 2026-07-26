@@ -28,7 +28,7 @@ class Agent(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     )  # ex: "agent/analista-cobranca-pj.md"
     model: Mapped[str] = mapped_column(
         String(255), nullable=False
-    )  # ex: "lmstudio/qwen/qwen3.6-27b"
+    )  # ex: "lmstudio/qwen3.6-27b-mtp"
 
     # Skills permitidos (lista de slugs)
     skills: Mapped[list[str]] = mapped_column(

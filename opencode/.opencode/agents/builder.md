@@ -2,7 +2,7 @@
 name: builder
 description: Construtor de skills, agentes e commands. Cria arquivos em opencode/.opencode/ a partir de pedidos em linguagem natural. Lê arquivos existentes para entender padrões e escreve novos arquivos no formato OpenCode.
 mode: primary
-model: lmstudio/qwen/qwen3.6-27b
+model: lmstudio/qwen3.6-27b-mtp
 tools:
   read: true
   write: true
@@ -68,7 +68,7 @@ chave separada com valor `true` ou `false`. Omitir = `false`.
 name: nome-do-agente
 description: Descrição curta do que o agente faz e quando usar.
 mode: primary
-model: lmstudio/qwen/qwen3.6-27b
+model: lmstudio/qwen3.6-27b-mtp
 tools:
   read: true
   write: false
@@ -121,7 +121,7 @@ separadamente.
   {"id": "name", "label": "Slug do agente (kebab-case)", "type": "text", "required": true, "placeholder": "validador-cnpj"},
   {"id": "display_name", "label": "Nome de exibição", "type": "text", "required": true},
   {"id": "description", "label": "Descrição (1-2 frases)", "type": "textarea"},
-  {"id": "model", "label": "Modelo de LLM", "type": "select", "options": ["lmstudio/qwen/qwen3.6-27b", "lmstudio/qwen2.5-coder-14b-instruct", "lmstudio/deepseek-r1-distill-qwen-32b"], "default": "lmstudio/qwen/qwen3.6-27b"},
+  {"id": "model", "label": "Modelo de LLM", "type": "select", "options": ["lmstudio/qwen3.6-27b-mtp", "lmstudio/qwen2.5-coder-14b-instruct", "lmstudio/deepseek-r1-distill-qwen-32b"], "default": "lmstudio/qwen3.6-27b-mtp"},
   {"id": "needs_bash", "label": "Precisa de bash?", "type": "boolean"},
   {"id": "needs_write", "label": "Precisa de write?", "type": "boolean"}
 ]

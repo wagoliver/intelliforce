@@ -56,7 +56,7 @@ CRITICAL_ENVS: list[tuple[str, str]] = [
     ("JWT_SECRET", "jwt_secret"),
     ("VAULT_MASTER_KEY", "vault_master_key"),
     ("ADMIN_PASSWORD", "admin_password"),
-    ("WORKER_TOKEN", "worker_token"),
+    ("INTELLIFORCE_WORKER_TOKEN", "worker_token"),
     ("POSTGRES_PASSWORD", "postgres_password"),
     ("CLICKHOUSE_PASSWORD", "clickhouse_password"),
 ]
@@ -789,7 +789,7 @@ GUIDES: dict[ComponentId, ConfigGuide] = {
                 ),
                 snippet=(
                     "LMSTUDIO_BASE_URL=http://host.docker.internal:1234/v1\n"
-                    "LMSTUDIO_DEFAULT_MODEL=qwen/qwen3.6-27b\n"
+                    "LMSTUDIO_DEFAULT_MODEL=qwen3.6-27b-mtp\n"
                     "LMSTUDIO_API_KEY=lm-studio"
                 ),
             ),

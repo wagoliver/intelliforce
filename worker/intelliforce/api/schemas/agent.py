@@ -16,7 +16,7 @@ class AgentCreateRequest(BaseModel):
     display_name: str = Field(min_length=1, max_length=255)
     description: str = Field(default="", max_length=4000)
     opencode_agent_file: str = Field(description="Caminho do .md dentro de opencode/.opencode/agents/")
-    model: str = Field(description="Ex: 'lmstudio/qwen/qwen3.6-27b'")
+    model: str = Field(description="Ex: 'lmstudio/qwen3.6-27b-mtp'")
     skills: list[str] = Field(default_factory=list)
     policies: dict[str, Any] = Field(default_factory=dict)
     schedule: str | None = Field(default=None, description="Cron expression (5 ou 6 campos)")

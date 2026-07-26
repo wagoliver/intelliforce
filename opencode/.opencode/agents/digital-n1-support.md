@@ -2,7 +2,7 @@
 name: digital-n1-support
 description: Digital employee de suporte N1 que gera relatorios de chamados Zoho, avalia andamento, detecta riscos de SLA e sugere acoes para encerramento rapido.
 mode: subagent
-model: lmstudio/qwen/qwen3.6-27b
+model: lmstudio/qwen3.6-27b-mtp
 tools:
   read: true
   write: true

@@ -184,10 +184,10 @@ services:
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:8000     # browser → host
       API_URL_INTERNAL: http://api:8000              # server-side dentro do container
-      NEXT_PUBLIC_BASE_URL: http://localhost:3000
+      NEXT_PUBLIC_BASE_URL: http://localhost:3001
       NODE_ENV: production
     ports:
-      - "3000:3000"
+      - "3001:3000"                                   # 3000 já ocupada no host por outro container (open-webui)
     depends_on:
       api:
         condition: service_healthy

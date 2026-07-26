@@ -9,7 +9,7 @@
         "apiKey": "{env:LMSTUDIO_API_KEY}"
       },
       "models": {
-        "qwen/qwen3.6-27b": {
+        "qwen3.6-27b-mtp": {
           "name": "Arctica qwen3.6 27b",
           "options": {
             "max_tokens": 8192,
@@ -40,6 +40,6 @@
       }
     }
   },
-  "model": "lmstudio/qwen/qwen3.6-27b",
+  "model": "lmstudio/qwen3.6-27b-mtp",
   "disabled_providers": []
 }

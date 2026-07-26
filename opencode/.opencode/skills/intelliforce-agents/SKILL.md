@@ -25,7 +25,7 @@ python .../agents.py create \
     --name validador-de-notas \
     --display-name "Validador de Notas" \
     --opencode-agent-file "agents/validador-de-notas.md" \
-    --model "lmstudio/qwen/qwen3.6-27b" \
+    --model "lmstudio/qwen3.6-27b-mtp" \
     --skills consulta-itsm,intelliforce-api \
     --description "Valida CNPJs e dados fiscais antes do downstream"
 
@@ -43,7 +43,7 @@ python .../agents.py delete <uuid>
 - **opencode_agent_file** — path do .md (relativo a opencode/.opencode/), ex:
   `agents/validador-de-notas.md`. **Esse arquivo precisa existir** —
   geralmente foi criado antes pelo agente `builder` (use o switcher).
-- **model** — string identificando o modelo (ex: `lmstudio/qwen/qwen3.6-27b`)
+- **model** — string identificando o modelo (ex: `lmstudio/qwen3.6-27b-mtp`)
 
 ## Campos opcionais
 

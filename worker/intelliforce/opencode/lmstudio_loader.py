@@ -35,7 +35,7 @@ except Exception as _e:  # noqa: BLE001
 def extract_lmstudio_key(model: str | None) -> str | None:
     """Devolve a parte depois de 'lmstudio/' do identifier do agente.
 
-    Ex.: 'lmstudio/qwen/qwen3.6-27b' -> 'qwen/qwen3.6-27b'.
+    Ex.: 'lmstudio/qwen3.6-27b-mtp' -> 'qwen3.6-27b-mtp'.
     Retorna None se o modelo não estiver no provider lmstudio (caller
     decide o fallback — geralmente settings.lmstudio_default_model).
     """

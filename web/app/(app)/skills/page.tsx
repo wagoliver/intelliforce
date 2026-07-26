@@ -43,6 +43,7 @@ export default function SkillsPage() {
     refetch: refetchSessions,
     loadMessages,
     archive: archiveSession,
+    rename: renameSession,
   } = useChatSessions();
   const [input, setInput] = useState("");
   const [selected, setSelected] = useState<{ kind: OpenCodeFile["kind"] | "script"; slug: string } | null>(null);
@@ -84,6 +85,9 @@ export default function SkillsPage() {
       // Apagamos a conversa ativa — reseta pra evitar continuar em sessão arquivada
       reset();
     }
+  }
+  async function handleRenameSession(s: ChatSessionItem, title: string) {
+    await renameSession(s.id, title);
   }
 
   // Hidrata seleção de agente do localStorage
@@ -278,6 +282,7 @@ export default function SkillsPage() {
           onNewConversation={handleNewConversation}
           onOpenSession={handleOpenSession}
           onArchive={handleArchiveSession}
+          onRename={handleRenameSession}
         />
         <FileTree
           tree={tree}

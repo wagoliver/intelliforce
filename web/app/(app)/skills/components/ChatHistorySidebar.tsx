@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { ChatSessionItem } from "../hooks/useChatSessions";
 
@@ -13,6 +13,7 @@ type Props = {
   onNewConversation: () => void;
   onOpenSession: (s: ChatSessionItem) => void;
   onArchive: (s: ChatSessionItem) => void;
+  onRename: (s: ChatSessionItem, title: string) => void;
 };
 
 /**
@@ -31,6 +32,7 @@ export function ChatHistorySidebar({
   onNewConversation,
   onOpenSession,
   onArchive,
+  onRename,
 }: Props) {
   return (
     <aside
@@ -106,6 +108,7 @@ export function ChatHistorySidebar({
                   active={s.opencode_session_id === activeOpencodeSessionId}
                   onOpen={() => onOpenSession(s)}
                   onArchive={() => onArchive(s)}
+                  onRename={(title) => onRename(s, title)}
                 />
               ))}
             </ul>
@@ -121,32 +124,79 @@ function SessionRow({
   active,
   onOpen,
   onArchive,
+  onRename,
 }: {
   session: ChatSessionItem;
   active: boolean;
   onOpen: () => void;
   onArchive: () => void;
+  onRename: (title: string) => void;
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
   const title = session.title?.trim() || "(sem título)";
   const subtitle = session.last_message_preview?.trim() || "—";
   const when = relativeTime(session.updated_at);
 
+  useEffect(() => {
+    if (editing) inputRef.current?.select();
+  }, [editing]);
+
+  function startEditing() {
+    setDraft(session.title?.trim() || "");
+    setEditing(true);
+  }
+
+  function commitEdit() {
+    const trimmed = draft.trim();
+    setEditing(false);
+    if (trimmed && trimmed !== (session.title?.trim() || "")) {
+      onRename(trimmed);
+    }
+  }
+
   return (
     <li className={`skills-history-item ${active ? "skills-history-item--active" : ""}`}>
-      <button
-        type="button"
-        className="skills-history-item-main"
-        onClick={onOpen}
-        title={title}
-      >
-        <span className="skills-history-item-title">{title}</span>
-        <span className="skills-history-item-meta">
-          <span className="skills-history-item-agent">{session.agent}</span>
-          <span className="skills-history-item-when">{when}</span>
-        </span>
-        <span className="skills-history-item-preview">{subtitle}</span>
-      </button>
+      {editing ? (
+        <input
+          ref={inputRef}
+          className="skills-history-item-edit"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onClick={(e) => e.stopPropagation()}
+          onBlur={commitEdit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              commitEdit();
+            } else if (e.key === "Escape") {
+              e.preventDefault();
+              setEditing(false);
+            }
+          }}
+          placeholder="Nome da conversa"
+        />
+      ) : (
+        <button
+          type="button"
+          className="skills-history-item-main"
+          onClick={onOpen}
+          onDoubleClick={(e) => {
+            e.stopPropagation();
+            startEditing();
+          }}
+          title={title}
+        >
+          <span className="skills-history-item-title">{title}</span>
+          <span className="skills-history-item-meta">
+            <span className="skills-history-item-agent">{session.agent}</span>
+            <span className="skills-history-item-when">{when}</span>
+          </span>
+          <span className="skills-history-item-preview">{subtitle}</span>
+        </button>
+      )}
       <div className="skills-history-item-actions">
         {confirmDelete ? (
           <>
@@ -173,29 +223,52 @@ function SessionRow({
               ✕
             </button>
           </>
-        ) : (
-          <button
-            type="button"
-            className="skills-history-item-delete"
-            onClick={(e) => {
-              e.stopPropagation();
-              setConfirmDelete(true);
-            }}
-            title="Arquivar conversa"
-            aria-label="Arquivar conversa"
-          >
-            <svg viewBox="0 0 16 16" width={12} height={12} aria-hidden="true">
-              <path
-                d="M3 5h10M6 5V3.5A.5.5 0 0 1 6.5 3h3a.5.5 0 0 1 .5.5V5M4.5 5l.6 8a1 1 0 0 0 1 .9h3.8a1 1 0 0 0 1-.9l.6-8"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.3"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </button>
-        )}
+        ) : !editing ? (
+          <>
+            <button
+              type="button"
+              className="skills-history-item-rename"
+              onClick={(e) => {
+                e.stopPropagation();
+                startEditing();
+              }}
+              title="Renomear conversa"
+              aria-label="Renomear conversa"
+            >
+              <svg viewBox="0 0 16 16" width={12} height={12} aria-hidden="true">
+                <path
+                  d="M11.3 2.7a1 1 0 0 1 1.4 0l.6.6a1 1 0 0 1 0 1.4l-6.8 6.8-2.4.6.6-2.4z"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+            <button
+              type="button"
+              className="skills-history-item-delete"
+              onClick={(e) => {
+                e.stopPropagation();
+                setConfirmDelete(true);
+              }}
+              title="Arquivar conversa"
+              aria-label="Arquivar conversa"
+            >
+              <svg viewBox="0 0 16 16" width={12} height={12} aria-hidden="true">
+                <path
+                  d="M3 5h10M6 5V3.5A.5.5 0 0 1 6.5 3h3a.5.5 0 0 1 .5.5V5M4.5 5l.6 8a1 1 0 0 0 1 .9h3.8a1 1 0 0 0 1-.9l.6-8"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.3"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+          </>
+        ) : null}
       </div>
     </li>
   );

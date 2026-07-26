@@ -1960,6 +1960,22 @@
   opacity: 1;
 }
 
+.skills-history-item-edit {
+  flex: 1;
+  min-width: 0;
+  margin: 6px 6px 6px 10px;
+  padding: 4px 6px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg);
+  background: color-mix(in oklab, var(--fg) 6%, transparent);
+  border: 1px solid color-mix(in oklab, var(--accent, var(--fg)) 40%, transparent);
+  border-radius: 5px;
+  outline: none;
+}
+
+.skills-history-item-rename,
 .skills-history-item-delete,
 .skills-history-item-confirm,
 .skills-history-item-cancel {
@@ -1975,6 +1991,7 @@
   justify-content: center;
   transition: background 140ms, color 140ms, border 140ms;
 }
+.skills-history-item-rename:hover,
 .skills-history-item-delete:hover {
   color: var(--fg);
   background: color-mix(in oklab, var(--fg) 8%, transparent);

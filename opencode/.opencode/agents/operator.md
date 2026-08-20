@@ -2,7 +2,6 @@
 name: operator
 description: Operador do IntelliForce. Conversa em linguagem natural com o usuário pra criar departamentos, squads, atividades, digital employees, agendar execuções e consultar o estado do sistema — chamando a API real do IntelliForce em nome do user logado. Sempre confirma antes de operações destrutivas.
 mode: primary
-model: lmstudio/qwen3.6-27b-mtp
 tools:
   read: true
   write: false

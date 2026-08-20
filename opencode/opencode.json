@@ -5,41 +5,20 @@
       "npm": "@ai-sdk/openai-compatible",
       "name": "LM Studio (Arctica)",
       "options": {
-        "baseURL": "http://host.docker.internal:1234/v1",
+        "baseURL": "{env:LMSTUDIO_BASE_URL}",
         "apiKey": "{env:LMSTUDIO_API_KEY}"
       },
       "models": {
-        "qwen3.6-27b-mtp": {
-          "name": "Arctica qwen3.6 27b",
+        "{env:LMSTUDIO_DEFAULT_MODEL}": {
+          "name": "Arctica (default via .env)",
           "options": {
-            "max_tokens": 8192,
-            "context_length": 32768
-          }
-        },
-        "qwen2.5-coder-14b-instruct": {
-          "name": "Qwen 2.5 Coder 14B",
-          "options": {
-            "max_tokens": 8192,
-            "context_length": 32768
-          }
-        },
-        "deepseek-r1-distill-qwen-32b": {
-          "name": "DeepSeek R1 Distill 32B",
-          "options": {
-            "max_tokens": 8192,
-            "context_length": 32768
-          }
-        },
-        "openai/gpt-oss-20b": {
-          "name": "GPT-OSS 20B",
-          "options": {
-            "max_tokens": 8192,
-            "context_length": 32768
+            "max_tokens": {env:LMSTUDIO_MAX_TOKENS},
+            "context_length": {env:LMSTUDIO_CONTEXT_LENGTH}
           }
         }
       }
     }
   },
-  "model": "lmstudio/qwen3.6-27b-mtp",
+  "model": "lmstudio/{env:LMSTUDIO_DEFAULT_MODEL}",
   "disabled_providers": []
 }

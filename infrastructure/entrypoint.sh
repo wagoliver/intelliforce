@@ -38,17 +38,76 @@ if [ -d "$SOURCE_DIR" ]; then
         ln -sfn "$SOURCE_DIR/.opencode" "$RUNTIME_DIR/.opencode"
     fi
 
+    # Defaults dos parâmetros de LLM.
+    #
+    # O opencode.json referencia {env:LMSTUDIO_*} inclusive em posições onde
+    # valor vazio geraria JSON inválido (chave do registro de modelos e os
+    # numéricos max_tokens/context_length). Sem default, um .env incompleto
+    # derrubaria o container com erro de parse em vez de mensagem útil.
+    #
+    # Estes são fallback de último recurso — o .env é a fonte da verdade.
+    : "${LMSTUDIO_DEFAULT_MODEL:=qwen3.6-27b-mtp}"
+    : "${LMSTUDIO_MAX_TOKENS:=8192}"
+    : "${LMSTUDIO_CONTEXT_LENGTH:=32768}"
+    : "${LMSTUDIO_BASE_URL:=http://host.docker.internal:1234/v1}"
+    export LMSTUDIO_DEFAULT_MODEL LMSTUDIO_MAX_TOKENS LMSTUDIO_CONTEXT_LENGTH LMSTUDIO_BASE_URL
+
+    # max_tokens (teto de saída) precisa caber na janela de contexto. Se o
+    # .env vier invertido, o LM Studio só reclama na primeira execução real —
+    # avisar aqui economiza uma sessão de debug.
+    if [ "$LMSTUDIO_MAX_TOKENS" -gt "$LMSTUDIO_CONTEXT_LENGTH" ] 2>/dev/null; then
+        echo "[entrypoint] ⚠ LMSTUDIO_MAX_TOKENS ($LMSTUDIO_MAX_TOKENS) > LMSTUDIO_CONTEXT_LENGTH ($LMSTUDIO_CONTEXT_LENGTH)."
+        echo "[entrypoint]   max_tokens é o teto de SAÍDA e cabe dentro do contexto. Revise o .env."
+    fi
+
+    echo "[entrypoint] Modelo LLM (via .env): $LMSTUDIO_DEFAULT_MODEL"
+
     # Substitui {env:VAR_NAME} pelos valores reais das variáveis de ambiente
     # (só no opencode.json runtime — não no arquivo do host).
+    #
+    # Feito em Python, não sed: valores com "/" (LMSTUDIO_BASE_URL) ou "&"
+    # corrompem o replacement do sed, que interpreta esses caracteres. Aqui a
+    # substituição é literal via str.replace e o JSON é validado no fim, então
+    # config quebrada falha aqui com mensagem clara em vez de virar erro
+    # obscuro do OpenCode CLI na primeira execução.
     if [ -f "$RUNTIME_DIR/opencode.json" ]; then
-        for var in $(grep -oE '\{env:[A-Z_]+\}' "$RUNTIME_DIR/opencode.json" | sort -u); do
-            var_name=$(echo "$var" | sed 's/{env:\(.*\)}/\1/')
-            var_value="${!var_name:-}"
-            # Escape pra sed (& \ /)
-            escaped=$(printf '%s\n' "$var_value" | sed 's/[\&/]/\\&/g')
-            sed -i "s/{env:${var_name}}/${escaped}/g" "$RUNTIME_DIR/opencode.json"
-            echo "[entrypoint]   substituído {env:${var_name}}"
-        done
+        python - "$RUNTIME_DIR/opencode.json" <<'PYEOF'
+import json
+import os
+import re
+import sys
+
+path = sys.argv[1]
+with open(path, encoding="utf-8") as fh:
+    content = fh.read()
+
+missing = []
+for var_name in sorted(set(re.findall(r"\{env:([A-Z_]+)\}", content))):
+    value = os.environ.get(var_name)
+    if value is None or value == "":
+        missing.append(var_name)
+        continue
+    content = content.replace("{env:%s}" % var_name, value)
+    # Mascara só segredos de verdade — LMSTUDIO_MAX_TOKENS não é segredo e
+    # ver o valor no log ajuda a diagnosticar config errada.
+    secret = var_name.endswith(("_KEY", "_SECRET", "_TOKEN", "_PASSWORD"))
+    shown = "***" if secret else value
+    print("[entrypoint]   substituído {env:%s} -> %s" % (var_name, shown))
+
+if missing:
+    print("[entrypoint] ❌ variáveis ausentes/vazias no .env: %s" % ", ".join(missing))
+    sys.exit(1)
+
+try:
+    json.loads(content)
+except json.JSONDecodeError as e:
+    print("[entrypoint] ❌ opencode.json inválido após substituição: %s" % e)
+    print("[entrypoint]    Confira aspas e valores numéricos no .env.")
+    sys.exit(1)
+
+with open(path, "w", encoding="utf-8") as fh:
+    fh.write(content)
+PYEOF
     fi
 
     export OPENCODE_CONFIG_PATH="$RUNTIME_DIR"

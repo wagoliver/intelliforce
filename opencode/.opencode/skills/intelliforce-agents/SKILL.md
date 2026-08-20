@@ -25,7 +25,6 @@ python .../agents.py create \
     --name validador-de-notas \
     --display-name "Validador de Notas" \
     --opencode-agent-file "agents/validador-de-notas.md" \
-    --model "lmstudio/qwen3.6-27b-mtp" \
     --skills consulta-itsm,intelliforce-api \
     --description "Valida CNPJs e dados fiscais antes do downstream"
 
@@ -43,7 +42,17 @@ python .../agents.py delete <uuid>
 - **opencode_agent_file** — path do .md (relativo a opencode/.opencode/), ex:
   `agents/validador-de-notas.md`. **Esse arquivo precisa existir** —
   geralmente foi criado antes pelo agente `builder` (use o switcher).
-- **model** — string identificando o modelo (ex: `lmstudio/qwen3.6-27b-mtp`)
+
+## Modelo de LLM — não se escolhe por agente
+
+O modelo é único pra plataforma inteira e vem de `LMSTUDIO_DEFAULT_MODEL` no
+`.env`. **Não passe `--model`** (a flag ainda existe mas é ignorada) e não
+declare `model:` no frontmatter do agent.md. O campo `model` devolvido pelo
+`get`/`list` é informativo: mostra o modelo efetivo do `.env`, não uma escolha
+gravada no agente.
+
+Se o usuário pedir pra trocar o modelo de um agente, explique que a troca é
+global e se faz no `.env` + restart dos containers.
 
 ## Campos opcionais
 

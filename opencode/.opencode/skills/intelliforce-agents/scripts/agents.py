@@ -86,7 +86,6 @@ def cmd_create(args: argparse.Namespace) -> int:
         "name": args.name,
         "display_name": args.display_name,
         "opencode_agent_file": args.opencode_agent_file,
-        "model": args.model,
     }
     if args.description is not None:
         payload["description"] = args.description
@@ -116,8 +115,6 @@ def cmd_update(args: argparse.Namespace) -> int:
         payload["description"] = args.description
     if args.opencode_agent_file is not None:
         payload["opencode_agent_file"] = args.opencode_agent_file
-    if args.model is not None:
-        payload["model"] = args.model
     skills = _parse_skills(args.skills)
     if skills is not None:
         payload["skills"] = skills
@@ -171,7 +168,7 @@ def main() -> int:
     p_create.add_argument("--display-name", required=True)
     p_create.add_argument("--opencode-agent-file", required=True,
                           help="Path .md dentro de opencode/.opencode/, ex: agents/validador.md")
-    p_create.add_argument("--model", required=True)
+    p_create.add_argument("--model", help="DEPRECADO e ignorado — modelo vem do .env")
     p_create.add_argument("--description")
     p_create.add_argument("--skills", help="Comma-separated lista de slugs de skills")
     p_create.add_argument("--schedule")
@@ -182,7 +179,7 @@ def main() -> int:
     p_update.add_argument("--display-name", dest="display_name")
     p_update.add_argument("--description")
     p_update.add_argument("--opencode-agent-file", dest="opencode_agent_file")
-    p_update.add_argument("--model")
+    p_update.add_argument("--model", help="DEPRECADO e ignorado — modelo vem do .env")
     p_update.add_argument("--skills")
     p_update.add_argument("--schedule")
     p_update.add_argument("--is-active", dest="is_active", help="true|false")

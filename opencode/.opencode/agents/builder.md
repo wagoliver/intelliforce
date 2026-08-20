@@ -2,7 +2,6 @@
 name: builder
 description: Construtor de skills, agentes e commands. Cria arquivos em opencode/.opencode/ a partir de pedidos em linguagem natural. Lê arquivos existentes para entender padrões e escreve novos arquivos no formato OpenCode.
 mode: primary
-model: lmstudio/qwen3.6-27b-mtp
 tools:
   read: true
   write: true
@@ -61,6 +60,11 @@ tools:
 Tools válidas: `read`, `write`, `bash`, `edit`, `fetch`. Cada uma é uma
 chave separada com valor `true` ou `false`. Omitir = `false`.
 
+**Nunca declare `model:` no frontmatter.** O modelo de LLM é único para toda
+a plataforma e vem de `LMSTUDIO_DEFAULT_MODEL` no `.env`, resolvido no
+`opencode.json`. Um `model:` hardcoded no agente sobrescreveria esse valor e
+faria o agente ignorar a troca de modelo feita no `.env`.
+
 ## Template de agent.md válido (use este como base)
 
 ```yaml
@@ -68,7 +72,6 @@ chave separada com valor `true` ou `false`. Omitir = `false`.
 name: nome-do-agente
 description: Descrição curta do que o agente faz e quando usar.
 mode: primary
-model: lmstudio/qwen3.6-27b-mtp
 tools:
   read: true
   write: false
@@ -121,7 +124,6 @@ separadamente.
   {"id": "name", "label": "Slug do agente (kebab-case)", "type": "text", "required": true, "placeholder": "validador-cnpj"},
   {"id": "display_name", "label": "Nome de exibição", "type": "text", "required": true},
   {"id": "description", "label": "Descrição (1-2 frases)", "type": "textarea"},
-  {"id": "model", "label": "Modelo de LLM", "type": "select", "options": ["lmstudio/qwen3.6-27b-mtp", "lmstudio/qwen2.5-coder-14b-instruct", "lmstudio/deepseek-r1-distill-qwen-32b"], "default": "lmstudio/qwen3.6-27b-mtp"},
   {"id": "needs_bash", "label": "Precisa de bash?", "type": "boolean"},
   {"id": "needs_write", "label": "Precisa de write?", "type": "boolean"}
 ]

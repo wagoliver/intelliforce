@@ -96,10 +96,14 @@ class TaskExecutor(EventSubscriber):
         # Injeta token da service account (worker-internal) pra skills
         # poderem chamar a API IntelliForce internamente — sem isso, qualquer
         # skill que faça HTTP pra Vault/api falha com TOKEN_EMPTY.
+        #
+        # `model` não é passado de propósito: o modelo é único pra plataforma
+        # inteira e vem de LMSTUDIO_DEFAULT_MODEL no .env, resolvido no
+        # opencode.json pelo entrypoint. Omitir o --model deixa o OpenCode
+        # cair no default global, que já é o valor do .env.
         result = await self.runner.run(
             prompt=task.prompt,
             agent=agent.name,
-            model=agent.model if agent.model else None,
             session_id=task.opencode_session_id,
             extra_env=_build_worker_extra_env(),
         )

@@ -16,6 +16,7 @@ from intelliforce.api.schemas.agent import (
 from intelliforce.db.models.agent import Agent
 from intelliforce.db.models.user import User
 from intelliforce.events.bus import EventBus
+from intelliforce.settings import get_settings
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 
@@ -35,7 +36,9 @@ async def create_agent(
         display_name=payload.display_name,
         description=payload.description,
         opencode_agent_file=payload.opencode_agent_file,
-        model=payload.model,
+        # payload.model é deprecado e ignorado — o modelo é único pra
+        # plataforma e vem de LMSTUDIO_DEFAULT_MODEL no .env.
+        model=None,
         skills=payload.skills,
         policies=payload.policies,
         schedule=payload.schedule,
@@ -51,7 +54,14 @@ async def create_agent(
         type="agent.created",
         aggregate_id=str(agent.id),
         aggregate_type="agent",
-        payload={"name": agent.name, "model": agent.model, "skills": agent.skills},
+        payload={
+            "name": agent.name,
+            # Modelo efetivo no momento da criação (vem do .env). Registrado
+            # pra auditoria saber com que modelo o agente nasceu, mesmo que a
+            # coluna esteja NULL.
+            "model": f"lmstudio/{get_settings().lmstudio_default_model}",
+            "skills": agent.skills,
+        },
         metadata={"actor": str(user.id)},
     )
     await db.commit()
@@ -100,6 +110,9 @@ async def update_agent(
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Agente não encontrado")
 
     changes = payload.model_dump(exclude_unset=True)
+    # `model` é deprecado e ignorado — o modelo vem do .env, não por agente.
+    # Descartado aqui pro setattr genérico não reintroduzir override no banco.
+    changes.pop("model", None)
     for field, value in changes.items():
         setattr(agent, field, value)
 

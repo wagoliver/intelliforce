@@ -26,9 +26,13 @@ class Agent(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     opencode_agent_file: Mapped[str] = mapped_column(
         String(255), nullable=False
     )  # ex: "agent/analista-cobranca-pj.md"
-    model: Mapped[str] = mapped_column(
-        String(255), nullable=False
-    )  # ex: "lmstudio/qwen3.6-27b-mtp"
+    # DEPRECADO (migration 0013) — o modelo é único pra plataforma e vem de
+    # LMSTUDIO_DEFAULT_MODEL no .env. Coluna mantida nullable e sempre NULL
+    # pra preservar histórico; nada no caminho de execução a lê. A API expõe
+    # o modelo efetivo do .env via AgentOut, não este campo.
+    model: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )
 
     # Skills permitidos (lista de slugs)
     skills: Mapped[list[str]] = mapped_column(

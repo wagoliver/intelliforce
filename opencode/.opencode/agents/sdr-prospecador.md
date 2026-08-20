@@ -2,7 +2,6 @@
 name: sdr-prospecador
 description: Digital employee SDR que pesquisa empresas no Apollo.io, gera prospeccao qualificada com 5 leads por comercial e produz um documento de atividade comercial pronto para execucao.
 mode: subagent
-model: lmstudio/qwen3.6-27b-mtp
 tools:
   read: true
   write: true
